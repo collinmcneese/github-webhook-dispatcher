@@ -7,4 +7,5 @@ Example repository for consuming [GitHub webhook events](https://docs.github.com
 - [ ] Write out full docs for README
 - [ ] Add queueing mechanism
 - [ ] Add ability to poll GitHub and find failed event notifications for retransmission
+- [ ] Add option to read routes from an alternate source instead of local TOML file
 - [ ] Add cloud-native infrastructure setup for all components for Azure and AWS
