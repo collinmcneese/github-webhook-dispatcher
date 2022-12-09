@@ -1,6 +1,6 @@
 # GitHub Webhook Dispatcher
 
-Example repository for consuming [GitHub webhook events](https://docs.github.com/en/developers/webhooks-and-events/webhooks/about-webhooks) in a centrallized API which can then handle routing webhooks to downstream service endpoints.
+Example repository for consuming [GitHub webhook events](https://docs.github.com/en/developers/webhooks-and-events/webhooks/about-webhooks) in a centralized API which can then handle routing webhooks to downstream service endpoints.
 
 ## TODOs
 
