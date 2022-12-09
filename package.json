@@ -1,0 +1,42 @@
+{
+  "name": "github-webhook-dispatcher",
+  "version": "1.0.0",
+  "description": "API endpoint to route GitHub webhooks to specified targets",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx node index.js",
+    "test": "eslint --ignore-path .eslintignore . ; cspell *.js *.md",
+    "dev": "ROUTE_FILE=local.routes.toml WEBHOOK_SECRET='my_secret' npx nodemon index.js",
+    "debug": "DEBUG=true ROUTE_FILE=local.routes.toml WEBHOOK_SECRET='my_secret' npx nodemon index.js"
+  },
+  "engines": {
+    "npm": ">=8.0.0",
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/collinmcneese/github-webhook-dispatcher.git"
+  },
+  "keywords": [
+    "github",
+    "webhook"
+  ],
+  "author": "Collin McNeese <collinmcneese@github.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/collinmcneese/github-webhook-dispatcher/issues"
+  },
+  "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
+  "devDependencies": {
+    "cspell": "^6.17.0",
+    "eslint": "^8.29.0",
+    "eslint-config-strongloop": "^2.1.0",
+    "nodemon": "^2.0.20"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "helmet": "^6.0.1",
+    "request": "^2.88.2",
+    "toml": "^3.0.0"
+  }
+}

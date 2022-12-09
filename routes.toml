@@ -1,0 +1,5 @@
+[my-org]
+
+[my-org.repo1]
+
+target = "http://localhost:3000/health"
