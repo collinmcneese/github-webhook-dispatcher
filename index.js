@@ -5,19 +5,29 @@ const express = require('express');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const app = express();
-const port = process.env.GH_WEBHOOK_PORT || 3000;
 const crypto = require('crypto');
 const toml = require('toml');
 const request = require('request');
 
-const routeFile = process.env.ROUTE_FILE;
+// Read environment variables from .env file
+require('dotenv').config();
+
+// Get the route file from the environment
+// This file should be present or else the app will not start
+const routeFile = process.env.WHDISPATCHER_ROUTE_FILE;
+if (!routeFile) {
+  throw new Error('WHDISPATCHER_ROUTE_FILE environment variable not set');
+}
 
 // Check if DEBUG environment variable is set
-const debug = !!process.env.DEBUG;
+const debug = !!process.env.WHDISPATCHER_DEBUG;
 console.log(`Debug mode: ${debug}`);
 
+// Set the local port to listen on for the app
+const port = process.env.WHDISPATCHER_PORT || 3000;
+
 // Get the webhook secret from the environment or use a default value
-const webhookSecret = process.env.WEBHOOK_SECRET;
+const webhookSecret = process.env.WHDISPATCHER_WEBHOOK_SECRET;
 
 // Parse the request body as JSON
 app.use(bodyParser.json());

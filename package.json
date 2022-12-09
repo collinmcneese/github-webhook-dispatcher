@@ -6,8 +6,8 @@
   "scripts": {
     "start": "npx node index.js",
     "test": "eslint --ignore-path .eslintignore . ; cspell *.js *.md",
-    "dev": "ROUTE_FILE=local.routes.toml WEBHOOK_SECRET='my_secret' npx nodemon index.js",
-    "debug": "DEBUG=true ROUTE_FILE=local.routes.toml WEBHOOK_SECRET='my_secret' npx nodemon index.js"
+    "dev": "npx nodemon index.js",
+    "debug": "WHDISPATCHER_DEBUG=true npx nodemon index.js"
   },
   "engines": {
     "npm": ">=8.0.0",
@@ -34,6 +34,7 @@
     "nodemon": "^2.0.20"
   },
   "dependencies": {
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "helmet": "^6.0.1",
     "request": "^2.88.2",
