@@ -1,5 +1,7 @@
 [my-org]
 
+target = "http://localhost:3000/dummy1"
+
 [my-org.repo1]
 
-target = "http://localhost:3000/health"
+target = "http://localhost:3000/dummy2"

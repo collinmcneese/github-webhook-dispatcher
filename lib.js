@@ -11,9 +11,14 @@ async function getTargetUrl(owner, repo) {
 
   console.log(`Looking for route for ${owner}/${repo}...`);
 
+  // Find a target match based on owner/repo or fallback to owner based route
   if (targetRoutes[owner] && targetRoutes[owner][repo]) {
     let route = targetRoutes[owner][repo];
     console.log(`Routing ${owner}/${repo} to ${route['target']}`);
+    return route.target;
+  } else if (targetRoutes[owner]) {
+    let route = targetRoutes[owner];
+    console.log(`Org target match, routing ${owner}/${repo} to ${route['target']}`);
     return route.target;
   } else {
     console.log(`No route found for ${owner}/${repo}`);

@@ -26,6 +26,14 @@ app.post('/health', (req, res) => {
   res.statusCode = 200;
   res.send('alive');
 });
+app.post('/dummy1', (req, res) => {
+  res.statusCode = 200;
+  res.send('dummy1');
+});
+app.post('/dummy2', (req, res) => {
+  res.statusCode = 200;
+  res.send('dummy2');
+});
 
 // Start the server
 app.listen(config.port, () => console.log(`GitHub webhook dispatcher listening on port ${config.port}!`));
