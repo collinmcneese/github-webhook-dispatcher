@@ -2,12 +2,12 @@
   "name": "github-webhook-dispatcher",
   "version": "1.0.0",
   "description": "API endpoint to route GitHub webhooks to specified targets",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "npx node index.js",
+    "start": "npx node app.js",
     "test": "eslint --ignore-path .eslintignore . ; cspell *.js *.md",
-    "dev": "npx nodemon index.js",
-    "debug": "WHDISPATCHER_DEBUG=true npx nodemon index.js"
+    "dev": "npx nodemon app.js",
+    "debug": "WHDISPATCHER_DEBUG=true npx nodemon app.js"
   },
   "engines": {
     "npm": ">=8.0.0",
