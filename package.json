@@ -28,7 +28,7 @@
   },
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
-    "cspell": "^6.23.1",
+    "cspell": "^6.26.3",
     "eslint": "^8.34.0",
     "eslint-config-strongloop": "^2.1.0",
     "nodemon": "^2.0.20"
