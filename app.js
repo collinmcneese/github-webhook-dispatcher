@@ -22,6 +22,16 @@ app.post('/', (req, res) => {
   lib.webhookHandler(req, res);
 });
 
+// Create a route to get a list of all the configured repositories
+app.get('/routes', (req, res) => {
+  lib.listRouteHandler(req, res);
+});
+
+// Create a route to serve the openapi spec
+app.get('/openapi.json', (req, res) => {
+  lib.openapiHandler(req, res);
+});
+
 // Create a dummy route for health checks
 app.post('/health', (req, res) => {
   res.statusCode = 200;
