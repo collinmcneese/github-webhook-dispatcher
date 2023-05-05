@@ -1,5 +1,5 @@
 ---
-  name: ci
+  name: ci-javascript
 
   on:
     workflow_dispatch:

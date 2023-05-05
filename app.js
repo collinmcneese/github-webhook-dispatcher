@@ -1,4 +1,5 @@
-// index.js
+// app.js
+// Main entry point for the GitHub webhook dispatcher
 
 // Create an express API server to consume GitHub webhook payload events and route them to the appropriate downstream service
 const express = require('express');
@@ -7,6 +8,13 @@ const bodyParser = require('body-parser');
 const app = express();
 const config = require('./config');
 const lib = require('./lib');
+const RateLimit = require('express-rate-limit');
+
+// Configure rate limiter
+const limiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // limit each IP to 60 requests per windowMs
+});
 
 // App Express configuration
 // Parse the request body as JSON
@@ -19,6 +27,18 @@ app.use(helmet());
 // Create a route for the GitHub webhook
 app.post('/', (req, res) => {
   lib.webhookHandler(req, res);
+});
+
+// Create a route to get a list of all the configured repositories
+app.get('/routes', (req, res) => {
+  lib.listRouteHandler(req, res);
+});
+
+// Create a route to serve the openapi spec
+// Apply rate limiting to this route
+app.use('/openapi.json', limiter);
+app.get('/openapi.json', (req, res) => {
+  lib.openapiHandler(req, res);
 });
 
 // Create a dummy route for health checks

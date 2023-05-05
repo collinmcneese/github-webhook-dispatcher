@@ -1,0 +1,82 @@
+openapi: 3.0.0
+info:
+  title: GitHub Webhook Dispatcher API
+  version: 1.0.0
+  description: An API for routing incoming GitHub webhook events to downstream services
+paths:
+  /:
+    post:
+      summary: Handle incoming GitHub webhook events
+      requestBody:
+        description: The payload of the incoming webhook event
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action that triggered the webhook event
+                repository:
+                  type: object
+                  description: The repository that the webhook event is associated with
+                  properties:
+                    owner:
+                      type: object
+                      properties:
+                        login:
+                          type: string
+                          description: The username of the repository owner or the organization name
+                    name:
+                      type: string
+                      description: The name of the repository
+                sender:
+                  type: object
+                  description: The user that triggered the webhook event
+                  properties:
+                    login:
+                      type: string
+                      description: The username of the user
+      responses:
+        '200':
+          description: The webhook event was successfully processed
+        '400':
+          description: The webhook event was invalid or could not be processed
+  /routes:
+    get:
+      summary: Get a list of all configured repositories
+      responses:
+        '200':
+          description: A list of all configured repositories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    owner:
+                      type: string
+                      description: The username of the repository owner or the organization name
+                    name:
+                      type: string
+                      description: The name of the repository
+  /health:
+    post:
+      summary: Check the health of the API
+      responses:
+        '200':
+          description: The API is alive
+  /dummy1:
+    post:
+      summary: A dummy route for testing purposes
+      responses:
+        '200':
+          description: The route is working
+  /dummy2:
+    post:
+      summary: Another dummy route for testing purposes
+      responses:
+        '200':
+          description: The route is working

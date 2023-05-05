@@ -1,13 +1,36 @@
 const config = require('./config');
 const toml = require('toml');
+const yaml = require('js-yaml');
 const request = require('request');
 const fs = require('fs');
 const crypto = require('crypto');
 
+// Function to process provided route file
+// Allowed formats are TOML, JSON, YAML
+async function processRouteFile(routeFile) {
+  // Determine the file content type
+  // Allowed formats are TOML, JSON, YAML
+  // If the content is not one of these formats, throw an error
+  let routeFileContent = fs.readFileSync(routeFile, 'utf-8');
+
+  let routeFileContentType = routeFile.split('.').pop().toLowerCase();
+
+  if (routeFileContentType === 'toml') {
+    routeFileContent = toml.parse(routeFileContent);
+  } else if (routeFileContentType === 'json') {
+    routeFileContent = JSON.parse(routeFileContent);
+  } else if (routeFileContentType === 'yaml' || routeFileContentType === 'yml') {
+    routeFileContent = yaml.safeLoad(routeFileContent);
+  } else {
+    throw new Error(`Route file ${routeFile} is not in TOML, JSON, or YAML format`);
+  }
+
+  return routeFileContent;
+}
+
 // Function to parse the repository full_name field and see if there is a matching entry in targetRoutes and return the target URL
 async function getTargetUrl(owner, repo) {
-  // Load routes from the routeFile and parse TOML to JSON
-  const targetRoutes = toml.parse(fs.readFileSync(config.routeFile, 'utf-8'));
+  const targetRoutes = await processRouteFile(config.routeFile);
 
   console.log(`Looking for route for ${owner}/${repo}...`);
 
@@ -24,6 +47,70 @@ async function getTargetUrl(owner, repo) {
     console.log(`No route found for ${owner}/${repo}`);
   }
   return null;
+}
+
+// Function to output a listing of all routes in the routeFile
+async function listRoutes() {
+  const targetRoutes = await processRouteFile(config.routeFile);
+  // process the targetRoutes object and output a list of all routes
+  // Object structure is{owner: {target: 'url', repo: {target: 'url'}}}
+  let routes = [];
+
+  // Loop through the targetRoutes object and build the routes array
+  // If the owner has a target, add it to the routes array
+  // If the owner has repos, loop through them and add their targets to the routes array
+  // Adds an object in format {owner: {target: 'url'}}
+  for (let owner in targetRoutes) {
+    if (targetRoutes[owner].target) {
+      routes.push({
+        owner: owner,
+        target: targetRoutes[owner].target,
+      });
+    }
+    // If the owner has other keys, loop through them and add their targets to the routes array
+    // Adds an object in format {owner: {repo: {target: 'url'}}}
+    if (Object.keys(targetRoutes[owner]).length > 1) {
+      for (let repo in targetRoutes[owner]) {
+        if (repo !== 'target') {
+          routes.push({
+            owner: owner,
+            repo: repo,
+            target: targetRoutes[owner][repo].target,
+          });
+        }
+      }
+    }
+  }
+
+  return routes;
+}
+
+async function listRouteHandler(req, res) {
+  try {
+    const routes = await listRoutes();
+
+    if (req.query.format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      let response = JSON.stringify(routes);
+      res.status(200).send(response);
+    } else {
+      res.setHeader('Content-Type', 'text/plain');
+      // Map the routes array to a string with one route per line
+      let response = routes.map(route => {
+        if (route.repo) {
+          return `${route.owner}/${route.repo} -> ${route.target}`;
+        } else {
+          return `${route.owner} -> ${route.target}`;
+        }
+      }).join('\n');
+
+      res.status(200).send(response);
+    }
+
+  } catch (error) {
+    console.log(`Error listing routes: ${error}`);
+    res.status(500).send(`Error listing routes: ${error}`);
+  }
 }
 
 // Function to send a POST request to the target URL with the passed payload
@@ -106,6 +193,27 @@ async function webhookHandler(req, res) {
   }
 }
 
+// Handler to generate a JSON OpenAPI spec for the application
+// Process the included openapi.yaml file and return it as JSON
+async function openapiHandler(req, res) {
+  try {
+    // Read the openapi.yaml file
+    const openapiFile = fs.readFileSync('./openapi.yaml', 'utf8');
+
+    // Parse the YAML file
+    const openapiSpec = yaml.load(openapiFile);
+
+    // Send the spec as JSON
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send(JSON.stringify(openapiSpec));
+  } catch (error) {
+    console.log(`Error generating OpenAPI spec: ${error}`);
+    res.status(500).send(`Error generating OpenAPI spec: ${error}`);
+  }
+}
+
 module.exports = {
+  listRouteHandler,
+  openapiHandler,
   webhookHandler,
 };
