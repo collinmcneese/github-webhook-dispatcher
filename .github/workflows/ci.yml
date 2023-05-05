@@ -6,9 +6,8 @@
     pull_request:
       branches: [ main ]
         paths:
-          - '**.js'
+          - './src/**'
           - 'package*.json'
-          - openapi.yaml
 
   jobs:
     validation:

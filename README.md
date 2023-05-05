@@ -11,6 +11,13 @@ graph TD
   lib-->|sendWebhook|targetURL
 ```
 
+## Application Components
+
+- [src/app.js](./src/app.js): The main Express application file. This file contains the Express API server and webhook handler.
+- [src/lib.js](./src/lib.js): The main library file. This file contains the webhook handler and functions for retrieving the target URL for a given GitHub repository.
+- [src/config.js](./src/config.js): The main configuration file. This file contains the configuration for the Express API server and webhook handler.
+- [src/openapi.yaml](./src/openapi.yaml): The OpenAPI specification file. This file contains the OpenAPI specification for the Express API server.
+
 ## Usage
 
 ## Environment Variables
@@ -30,6 +37,57 @@ export WHDISPATCHER_PORT=8080
 export WHDISPATCHER_WEBHOOK_SECRET=abc123
 export WHDISPATCHER_ROUTE_FILE=/path/to/routes.toml
 ```
+
+## Running the Application
+
+### Locally
+
+To run the application locally, first install the dependencies:
+
+```sh
+npm install
+```
+
+Then, start the application:
+
+```sh
+npm start
+```
+
+### Local Development
+
+To run the application locally in development mode, first install the dependencies:
+
+```sh
+npm install
+```
+
+Then, start the application in development mode:
+
+```sh
+npm run dev
+```
+
+### Docker
+
+To run the application in a Docker container, first build the Docker image:
+
+```sh
+docker build -t webhook-dispatcher .
+```
+
+Then, run the Docker container, passing required environment variables:
+
+```sh
+docker run \
+  -p 3000:3000 \
+  -e WHDISPATCHER_PORT=3000 \
+  -e WHDISPATCHER_WEBHOOK_SECRET=abc123 \
+  -e WHDISPATCHER_ROUTE_FILE=/path/to/routes.toml \
+  webhook-dispatcher
+```
+
+## Target Routes
 
 ### Target Routes File
 
