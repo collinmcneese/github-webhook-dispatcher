@@ -5,7 +5,7 @@
   "main": "app.js",
   "scripts": {
     "start": "npx node app.js",
-    "test": "eslint --ignore-path .eslintignore . ; cspell *.md",
+    "test": "eslint --ignore-path .eslintignore . ; cspell *.md ; npx markdownlint-cli -c markdownlint.yml *.md",
     "dev": "npx nodemon app.js",
     "debug": "WHDISPATCHER_DEBUG=true npx nodemon app.js"
   },
@@ -31,6 +31,7 @@
     "cspell": "^6.31.1",
     "eslint": "^8.39.0",
     "eslint-config-strongloop": "^2.1.0",
+    "markdownlint-cli": "^0.34.0",
     "nodemon": "^2.0.22"
   },
   "dependencies": {
