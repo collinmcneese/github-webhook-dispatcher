@@ -1,13 +1,37 @@
 const config = require('./config');
 const toml = require('toml');
+const yaml = require('js-yaml');
 const request = require('request');
 const fs = require('fs');
 const crypto = require('crypto');
 
+// Function to process provided route file
+// Allowed formats are TOML, JSON, YAML
+async function processRouteFile(routeFile) {
+  // Determine the file content type
+  // Allowed formats are TOML, JSON, YAML
+  // If the content is not one of these formats, throw an error
+  let routeFileContent = fs.readFileSync(routeFile, 'utf-8');
+
+  let routeFileContentType = routeFile.split('.').pop().toLowerCase();
+
+  if (routeFileContentType === 'toml') {
+    routeFileContent = toml.parse(routeFileContent);
+  } else if (routeFileContentType === 'json') {
+    routeFileContent = JSON.parse(routeFileContent);
+  } else if (routeFileContentType === 'yaml' || routeFileContentType === 'yml') {
+    routeFileContent = yaml.safeLoad(routeFileContent);
+  } else {
+    throw new Error(`Route file ${routeFile} is not in TOML, JSON, or YAML format`);
+  }
+
+  return routeFileContent;
+}
+
 // Function to parse the repository full_name field and see if there is a matching entry in targetRoutes and return the target URL
 async function getTargetUrl(owner, repo) {
   // Load routes from the routeFile and parse TOML to JSON
-  const targetRoutes = toml.parse(fs.readFileSync(config.routeFile, 'utf-8'));
+  const targetRoutes = await processRouteFile(config.routeFile);
 
   console.log(`Looking for route for ${owner}/${repo}...`);
 

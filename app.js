@@ -1,4 +1,5 @@
-// index.js
+// app.js
+// Main entry point for the GitHub webhook dispatcher
 
 // Create an express API server to consume GitHub webhook payload events and route them to the appropriate downstream service
 const express = require('express');
