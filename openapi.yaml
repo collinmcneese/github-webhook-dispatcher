@@ -45,10 +45,18 @@ paths:
           description: The webhook event was invalid or could not be processed
   /routes:
     get:
-      summary: Get a list of all configured repositories
+      summary: Get a list of all configured routes
+      parameters:
+        - name: format
+          in: query
+          description: The format of the response. Valid values are "json" and "text". Defaults to "text" if not specified.
+          schema:
+            type: string
+            enum: [json, text]
+            default: text
       responses:
         '200':
-          description: A list of all configured repositories
+          description: A list of all configured routes
           content:
             application/json:
               schema:

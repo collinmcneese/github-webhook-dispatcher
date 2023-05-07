@@ -90,11 +90,12 @@ async function listRouteHandler(req, res) {
     const routes = await listRoutes();
 
     if (req.query.format === 'json') {
-      res.setHeader('Content-Type', 'application/json');
       let response = JSON.stringify(routes);
+      res.setHeader('Content-Type', 'application/json');
       res.status(200).send(response);
     } else {
       res.setHeader('Content-Type', 'text/plain');
+
       // Map the routes array to a string with one route per line
       let response = routes.map(route => {
         if (route.repo) {

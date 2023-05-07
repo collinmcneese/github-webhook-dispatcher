@@ -6,8 +6,9 @@ require('dotenv').config();
 if (!process.env.WHDISPATCHER_ROUTE_FILE) {
   throw new Error('WHDISPATCHER_ROUTE_FILE environment variable not set');
 }
-const routeFile = process.env.WHDISPATCHER_ROUTE_FILE;
 
+// Get the route file from the environment
+const routeFile = process.env.WHDISPATCHER_ROUTE_FILE;
 
 // Check if DEBUG environment variable is set
 const debug = !!process.env.WHDISPATCHER_DEBUG;

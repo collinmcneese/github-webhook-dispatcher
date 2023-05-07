@@ -29,7 +29,7 @@ app.post('/', (req, res) => {
   lib.webhookHandler(req, res);
 });
 
-// Create a route to get a list of all the configured repositories
+// Create a route to get a list of all the configured routes
 app.get('/routes', (req, res) => {
   lib.listRouteHandler(req, res);
 });

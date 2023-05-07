@@ -63951,8 +63951,9 @@ function objectToString(o) {
 if (!process.env.WHDISPATCHER_ROUTE_FILE) {
   throw new Error('WHDISPATCHER_ROUTE_FILE environment variable not set');
 }
-const routeFile = process.env.WHDISPATCHER_ROUTE_FILE;
 
+// Get the route file from the environment
+const routeFile = process.env.WHDISPATCHER_ROUTE_FILE;
 
 // Check if DEBUG environment variable is set
 const debug = !!process.env.WHDISPATCHER_DEBUG;
@@ -64068,11 +64069,12 @@ async function listRouteHandler(req, res) {
     const routes = await listRoutes();
 
     if (req.query.format === 'json') {
-      res.setHeader('Content-Type', 'application/json');
       let response = JSON.stringify(routes);
+      res.setHeader('Content-Type', 'application/json');
       res.status(200).send(response);
     } else {
       res.setHeader('Content-Type', 'text/plain');
+
       // Map the routes array to a string with one route per line
       let response = routes.map(route => {
         if (route.repo) {
@@ -65482,7 +65484,7 @@ app.post('/', (req, res) => {
   lib.webhookHandler(req, res);
 });
 
-// Create a route to get a list of all the configured repositories
+// Create a route to get a list of all the configured routes
 app.get('/routes', (req, res) => {
   lib.listRouteHandler(req, res);
 });
