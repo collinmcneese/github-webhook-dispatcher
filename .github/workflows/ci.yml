@@ -5,7 +5,7 @@
     workflow_dispatch:
     pull_request:
       branches: [ main ]
-        paths:
+      paths:
           - './src/**'
           - 'package*.json'
 
