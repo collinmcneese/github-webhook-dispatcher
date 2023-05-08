@@ -9,18 +9,19 @@ on:
     - 'src/**'
     - '.github/workflows/version-collector.yml'
     - '.github/workflows/docker.yml'
-
+  pull_request:
+    paths:
+    - 'package**.json'
+    - 'src/**'
+    - '.github/workflows/version-collector.yml'
+    - '.github/workflows/docker.yml'
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  version-collector:
-    uses: ./.github/workflows/version-collector.yml
-
   build-and-push-image:
     runs-on: ubuntu-latest
-    needs: version-collector
     permissions:
       contents: read
       packages: write
@@ -29,10 +30,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: version-collector
+        uses: ./.github/workflows/version-collector.yml
+        id: version-collector
+
       - name: Prep
         run: |
-          echo Building with Package version ${{ needs.version-collector.outputs.package-version }}
-          (echo ${{ needs.version-collector.outputs.package-version }} | grep -s -q -E '^[0-9]+\.[0-9]+\.[0-9]+$') || (echo "could not determine version!" && exit 1)
+          echo Building with Package version ${{ steps.version-collector.outputs.package-version }}
+          (echo ${{ steps.version-collector.outputs.package-version }} | grep -s -q -E '^[0-9]+\.[0-9]+\.[0-9]+$') || (echo "could not determine version!" && exit 1)
 
       - name: Log in to the Container registry
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
@@ -48,16 +53,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: Build and push development Docker image on pull request
+      - name: Build development Docker image on pull request
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_call'
         uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
         with:
-          push: true
+          push: false
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RUNNER_VERSION=${{needs.version-collector.outputs.package-version}}
+            RUNNER_VERSION=${{steps.version-collector.outputs.package-version}}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{needs.version-collector.outputs.package-version}}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{steps.version-collector.outputs.package-version}}
 
       - name: Build and push latest main Docker image
         if: github.ref == 'refs/heads/main'
@@ -66,7 +71,7 @@ jobs:
           push: true
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RUNNER_VERSION=${{needs.version-collector.outputs.package-version}}
+            RUNNER_VERSION=${{steps.version-collector.outputs.package-version}}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{needs.version-collector.outputs.package-version}}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{steps.version-collector.outputs.package-version}}
