@@ -1,7 +1,6 @@
 const config = require('./config');
 const toml = require('toml');
 const yaml = require('js-yaml');
-const request = require('request');
 const fs = require('fs');
 const crypto = require('crypto');
 
@@ -127,18 +126,15 @@ async function sendPayload(targetUrl, payload, debug) {
     body: payload,
   };
 
-  // Send the request
-  if (debug) {
-    console.log(`Sending payload to ${targetUrl}`);
-  } else {
-    request(options, (error, response, body) => {
-      if (error) {
-        console.log(`Error sending payload to ${targetUrl}: ${error}`);
-      } else {
-        console.log(`Payload sent to ${targetUrl}`);
+  // Send the request to the target
+  fetch(targetUrl, options)
+    .then(res => {
+      if (debug) {
+        console.log(`Response status: ${res.status}`);
+        console.log(`Response body: ${res.body}`);
       }
     });
-  }
+
 }
 
 async function webhookHandler(req, res) {
