@@ -33,10 +33,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: version-collector
-        uses: ./.github/workflows/version-collector.yml
-        id: version-collector
-
       - name: Prep
         run: |
           echo Building with Package version ${{ needs.version-collector.outputs.package-version }}
