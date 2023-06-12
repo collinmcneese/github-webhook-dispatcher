@@ -54,7 +54,7 @@ jobs:
 
       - name: Build development Docker image on pull request
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_call'
-        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
+        uses: docker/build-push-action@44ea916f6c540f9302d50c2b1e5a8dc071f15cdf
         with:
           push: false
           labels: ${{ steps.meta.outputs.labels }}
@@ -65,7 +65,7 @@ jobs:
 
       - name: Build and push latest main Docker image
         if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
+        uses: docker/build-push-action@44ea916f6c540f9302d50c2b1e5a8dc071f15cdf
         with:
           push: true
           labels: ${{ steps.meta.outputs.labels }}
