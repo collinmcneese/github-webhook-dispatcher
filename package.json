@@ -32,7 +32,7 @@
     "cspell": "^6.31.1",
     "eslint": "^8.42.0",
     "eslint-config-strongloop": "^2.1.0",
-    "markdownlint-cli": "^0.34.0",
+    "markdownlint-cli": "^0.35.0",
     "nodemon": "^2.0.22"
   },
   "dependencies": {
