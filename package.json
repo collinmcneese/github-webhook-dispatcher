@@ -29,16 +29,16 @@
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
     "@vercel/ncc": "^0.38.1",
-    "cspell": "^8.0.0",
-    "eslint": "^8.54.0",
+    "cspell": "^8.1.0",
+    "eslint": "^8.55.0",
     "eslint-config-strongloop": "^2.1.0",
     "markdownlint-cli": "^0.37.0",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.2"
   },
   "dependencies": {
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-rate-limit": "^7.1.4",
+    "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "toml": "^3.0.0"
   }
