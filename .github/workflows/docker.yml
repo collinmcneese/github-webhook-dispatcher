@@ -15,6 +15,10 @@ on:
     - 'src/**'
     - '.github/workflows/version-collector.yml'
     - '.github/workflows/docker.yml'
+  release:
+    types:
+    - published
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
