@@ -15,9 +15,6 @@ on:
     - 'src/**'
     - '.github/workflows/version-collector.yml'
     - '.github/workflows/docker.yml'
-  release:
-    types:
-    - published
 
 env:
   REGISTRY: ghcr.io
@@ -68,7 +65,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{needs.version-collector.outputs.package-version}}
 
       - name: Build and push latest Docker image
-        if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56
         with:
           push: true
