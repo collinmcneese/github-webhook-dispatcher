@@ -32,11 +32,11 @@
     "cspell": "^8.3.2",
     "eslint": "^8.56.0",
     "eslint-config-strongloop": "^2.1.0",
-    "markdownlint-cli": "^0.38.0",
+    "markdownlint-cli": "^0.39.0",
     "nodemon": "^3.0.3"
   },
   "dependencies": {
-    "dotenv": "^16.3.2",
+    "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
