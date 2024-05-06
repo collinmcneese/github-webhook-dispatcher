@@ -29,10 +29,10 @@
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
     "@vercel/ncc": "^0.38.1",
-    "cspell": "^8.7.0",
-    "eslint": "^9.1.0",
+    "cspell": "^8.8.0",
+    "eslint": "^9.2.0",
     "eslint-config-strongloop": "^2.1.0",
-    "markdownlint-cli": "^0.39.0",
+    "markdownlint-cli": "^0.40.0",
     "nodemon": "^3.1.0"
   },
   "dependencies": {
