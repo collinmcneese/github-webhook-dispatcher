@@ -741,6 +741,9 @@ module.exports = json
 
 var FIRST_CHAR_REGEXP = /^[\x20\x09\x0a\x0d]*([^\x20\x09\x0a\x0d])/ // eslint-disable-line no-control-regex
 
+var JSON_SYNTAX_CHAR = '#'
+var JSON_SYNTAX_REGEXP = /#+/g
+
 /**
  * Create a middleware to parse JSON bodies.
  *
@@ -854,15 +857,23 @@ function json (options) {
 
 function createStrictSyntaxError (str, char) {
   var index = str.indexOf(char)
-  var partial = index !== -1
-    ? str.substring(0, index) + '#'
-    : ''
+  var partial = ''
+
+  if (index !== -1) {
+    partial = str.substring(0, index) + JSON_SYNTAX_CHAR
+
+    for (var i = index + 1; i < str.length; i++) {
+      partial += JSON_SYNTAX_CHAR
+    }
+  }
 
   try {
     JSON.parse(partial); /* istanbul ignore next */ throw new SyntaxError('strict violation')
   } catch (e) {
     return normalizeJsonSyntaxError(e, {
-      message: e.message.replace('#', char),
+      message: e.message.replace(JSON_SYNTAX_REGEXP, function (placeholder) {
+        return str.substring(index, index + placeholder.length)
+      }),
       stack: e.stack
     })
   }
@@ -2511,38 +2522,26 @@ module.exports = function callBoundIntrinsic(name, allowMissing) {
 
 var bind = __nccwpck_require__(8334);
 var GetIntrinsic = __nccwpck_require__(4538);
+var setFunctionLength = __nccwpck_require__(4056);
 
+var $TypeError = __nccwpck_require__(6361);
 var $apply = GetIntrinsic('%Function.prototype.apply%');
 var $call = GetIntrinsic('%Function.prototype.call%');
 var $reflectApply = GetIntrinsic('%Reflect.apply%', true) || bind.call($call, $apply);
 
-var $gOPD = GetIntrinsic('%Object.getOwnPropertyDescriptor%', true);
-var $defineProperty = GetIntrinsic('%Object.defineProperty%', true);
+var $defineProperty = __nccwpck_require__(6123);
 var $max = GetIntrinsic('%Math.max%');
 
-if ($defineProperty) {
-	try {
-		$defineProperty({}, 'a', { value: 1 });
-	} catch (e) {
-		// IE 8 has a broken defineProperty
-		$defineProperty = null;
-	}
-}
-
 module.exports = function callBind(originalFunction) {
-	var func = $reflectApply(bind, $call, arguments);
-	if ($gOPD && $defineProperty) {
-		var desc = $gOPD(func, 'length');
-		if (desc.configurable) {
-			// original length, plus the receiver, minus any additional arguments (after the receiver)
-			$defineProperty(
-				func,
-				'length',
-				{ value: 1 + $max(0, originalFunction.length - (arguments.length - 1)) }
-			);
-		}
+	if (typeof originalFunction !== 'function') {
+		throw new $TypeError('a function is required');
 	}
-	return func;
+	var func = $reflectApply(bind, $call, arguments);
+	return setFunctionLength(
+		func,
+		1 + $max(0, originalFunction.length - (arguments.length - 1)),
+		true
+	);
 };
 
 var applyBind = function applyBind() {
@@ -3050,8 +3049,8 @@ function ContentDisposition (type, parameters) {
  * obs-text      = %x80-FF
  * quoted-pair   = "\" ( HTAB / SP / VCHAR / obs-text )
  */
-var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g
-var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/
+var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g // eslint-disable-line no-control-regex
+var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/ // eslint-disable-line no-control-regex
 var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 
 /**
@@ -3060,7 +3059,7 @@ var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
  * quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
  * obs-text    = %x80-FF
  */
-var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g
+var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g // eslint-disable-line no-control-regex
 
 /**
  * RegExp to match chars that must be quoted-pair in RFC 7230 sec 3.2.6
@@ -3149,7 +3148,7 @@ function parse (string) {
 
   var index = header.indexOf(';')
   var type = index !== -1
-    ? header.substr(0, index).trim()
+    ? header.slice(0, index).trim()
     : header.trim()
 
   if (!TYPE_REGEXP.test(type)) {
@@ -3175,11 +3174,14 @@ function parse (string) {
       key = match[1].toLowerCase()
       value = match[2]
 
-      if (value[0] === '"') {
-        // remove quotes and escapes
-        value = value
-          .substr(1, value.length - 2)
-          .replace(QESC_REGEXP, '$1')
+      if (value.charCodeAt(0) === 0x22 /* " */) {
+        // remove quotes
+        value = value.slice(1, -1)
+
+        // remove escapes
+        if (value.indexOf('\\') !== -1) {
+          value = value.replace(QESC_REGEXP, '$1')
+        }
       }
 
       obj.parameters[key] = value
@@ -3490,6 +3492,10 @@ function serialize(name, val, options) {
     str += '; Secure';
   }
 
+  if (opt.partitioned) {
+    str += '; Partitioned'
+  }
+
   if (opt.priority) {
     var priority = typeof opt.priority === 'string'
       ? opt.priority.toLowerCase()
@@ -3551,7 +3557,7 @@ function decode (str) {
 /**
  * URL-encode value.
  *
- * @param {string} str
+ * @param {string} val
  * @returns {string}
  */
 
@@ -3586,6 +3592,70 @@ function tryDecode(str, decode) {
     return str;
   }
 }
+
+
+/***/ }),
+
+/***/ 4564:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var $defineProperty = __nccwpck_require__(6123);
+
+var $SyntaxError = __nccwpck_require__(5474);
+var $TypeError = __nccwpck_require__(6361);
+
+var gopd = __nccwpck_require__(8501);
+
+/** @type {import('.')} */
+module.exports = function defineDataProperty(
+	obj,
+	property,
+	value
+) {
+	if (!obj || (typeof obj !== 'object' && typeof obj !== 'function')) {
+		throw new $TypeError('`obj` must be an object or a function`');
+	}
+	if (typeof property !== 'string' && typeof property !== 'symbol') {
+		throw new $TypeError('`property` must be a string or a symbol`');
+	}
+	if (arguments.length > 3 && typeof arguments[3] !== 'boolean' && arguments[3] !== null) {
+		throw new $TypeError('`nonEnumerable`, if provided, must be a boolean or null');
+	}
+	if (arguments.length > 4 && typeof arguments[4] !== 'boolean' && arguments[4] !== null) {
+		throw new $TypeError('`nonWritable`, if provided, must be a boolean or null');
+	}
+	if (arguments.length > 5 && typeof arguments[5] !== 'boolean' && arguments[5] !== null) {
+		throw new $TypeError('`nonConfigurable`, if provided, must be a boolean or null');
+	}
+	if (arguments.length > 6 && typeof arguments[6] !== 'boolean') {
+		throw new $TypeError('`loose`, if provided, must be a boolean');
+	}
+
+	var nonEnumerable = arguments.length > 3 ? arguments[3] : null;
+	var nonWritable = arguments.length > 4 ? arguments[4] : null;
+	var nonConfigurable = arguments.length > 5 ? arguments[5] : null;
+	var loose = arguments.length > 6 ? arguments[6] : false;
+
+	/* @type {false | TypedPropertyDescriptor<unknown>} */
+	var desc = !!gopd && gopd(obj, property);
+
+	if ($defineProperty) {
+		$defineProperty(obj, property, {
+			configurable: nonConfigurable === null && desc ? desc.configurable : !nonConfigurable,
+			enumerable: nonEnumerable === null && desc ? desc.enumerable : !nonEnumerable,
+			value: value,
+			writable: nonWritable === null && desc ? desc.writable : !nonWritable
+		});
+	} else if (loose || (!nonEnumerable && !nonWritable && !nonConfigurable)) {
+		// must fall back to [[Set]], and was not explicitly asked to make non-enumerable, non-writable, or non-configurable
+		obj[property] = value; // eslint-disable-line no-param-reassign
+	} else {
+		throw new $SyntaxError('This environment does not support defining a property as non-configurable, non-writable, or non-enumerable.');
+	}
+};
 
 
 /***/ }),
@@ -4410,11 +4480,13 @@ function _parseVault (options) {
   // Parse .env.vault
   const result = DotenvModule.configDotenv({ path: vaultPath })
   if (!result.parsed) {
-    throw new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`)
+    const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`)
+    err.code = 'MISSING_DATA'
+    throw err
   }
 
   // handle scenario for comma separated keys - for use with key rotation
-  // example: DOTENV_KEY="dotenv://:key_1234@dotenv.org/vault/.env.vault?environment=prod,dotenv://:key_7890@dotenv.org/vault/.env.vault?environment=prod"
+  // example: DOTENV_KEY="dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=prod,dotenv://:key_7890@dotenvx.com/vault/.env.vault?environment=prod"
   const keys = _dotenvKey(options).split(',')
   const length = keys.length
 
@@ -4478,7 +4550,9 @@ function _instructions (result, dotenvKey) {
     uri = new URL(dotenvKey)
   } catch (error) {
     if (error.code === 'ERR_INVALID_URL') {
-      throw new Error('INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenv.org/vault/.env.vault?environment=development')
+      const err = new Error('INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development')
+      err.code = 'INVALID_DOTENV_KEY'
+      throw err
     }
 
     throw error
@@ -4487,34 +4561,53 @@ function _instructions (result, dotenvKey) {
   // Get decrypt key
   const key = uri.password
   if (!key) {
-    throw new Error('INVALID_DOTENV_KEY: Missing key part')
+    const err = new Error('INVALID_DOTENV_KEY: Missing key part')
+    err.code = 'INVALID_DOTENV_KEY'
+    throw err
   }
 
   // Get environment
   const environment = uri.searchParams.get('environment')
   if (!environment) {
-    throw new Error('INVALID_DOTENV_KEY: Missing environment part')
+    const err = new Error('INVALID_DOTENV_KEY: Missing environment part')
+    err.code = 'INVALID_DOTENV_KEY'
+    throw err
   }
 
   // Get ciphertext payload
   const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`
   const ciphertext = result.parsed[environmentKey] // DOTENV_VAULT_PRODUCTION
   if (!ciphertext) {
-    throw new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`)
+    const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`)
+    err.code = 'NOT_FOUND_DOTENV_ENVIRONMENT'
+    throw err
   }
 
   return { ciphertext, key }
 }
 
 function _vaultPath (options) {
-  let dotenvPath = path.resolve(process.cwd(), '.env')
+  let possibleVaultPath = null
 
   if (options && options.path && options.path.length > 0) {
-    dotenvPath = options.path
+    if (Array.isArray(options.path)) {
+      for (const filepath of options.path) {
+        if (fs.existsSync(filepath)) {
+          possibleVaultPath = filepath.endsWith('.vault') ? filepath : `${filepath}.vault`
+        }
+      }
+    } else {
+      possibleVaultPath = options.path.endsWith('.vault') ? options.path : `${options.path}.vault`
+    }
+  } else {
+    possibleVaultPath = path.resolve(process.cwd(), '.env.vault')
   }
 
-  // Locate .env.vault
-  return dotenvPath.endsWith('.vault') ? dotenvPath : `${dotenvPath}.vault`
+  if (fs.existsSync(possibleVaultPath)) {
+    return possibleVaultPath
+  }
+
+  return null
 }
 
 function _resolveHome (envPath) {
@@ -4537,51 +4630,73 @@ function _configVault (options) {
 }
 
 function configDotenv (options) {
-  let dotenvPath = path.resolve(process.cwd(), '.env')
+  const dotenvPath = path.resolve(process.cwd(), '.env')
   let encoding = 'utf8'
   const debug = Boolean(options && options.debug)
 
-  if (options) {
-    if (options.path != null) {
-      dotenvPath = _resolveHome(options.path)
-    }
-    if (options.encoding != null) {
-      encoding = options.encoding
+  if (options && options.encoding) {
+    encoding = options.encoding
+  } else {
+    if (debug) {
+      _debug('No encoding is specified. UTF-8 is used by default')
     }
   }
 
-  try {
-    // Specifying an encoding returns a string instead of a buffer
-    const parsed = DotenvModule.parse(fs.readFileSync(dotenvPath, { encoding }))
-
-    let processEnv = process.env
-    if (options && options.processEnv != null) {
-      processEnv = options.processEnv
+  let optionPaths = [dotenvPath] // default, look for .env
+  if (options && options.path) {
+    if (!Array.isArray(options.path)) {
+      optionPaths = [_resolveHome(options.path)]
+    } else {
+      optionPaths = [] // reset default
+      for (const filepath of options.path) {
+        optionPaths.push(_resolveHome(filepath))
+      }
     }
+  }
 
-    DotenvModule.populate(processEnv, parsed, options)
+  // Build the parsed data in a temporary object (because we need to return it).  Once we have the final
+  // parsed data, we will combine it with process.env (or options.processEnv if provided).
+  let lastError
+  const parsedAll = {}
+  for (const path of optionPaths) {
+    try {
+      // Specifying an encoding returns a string instead of a buffer
+      const parsed = DotenvModule.parse(fs.readFileSync(path, { encoding }))
 
-    return { parsed }
-  } catch (e) {
-    if (debug) {
-      _debug(`Failed to load ${dotenvPath} ${e.message}`)
+      DotenvModule.populate(parsedAll, parsed, options)
+    } catch (e) {
+      if (debug) {
+        _debug(`Failed to load ${path} ${e.message}`)
+      }
+      lastError = e
     }
+  }
 
-    return { error: e }
+  let processEnv = process.env
+  if (options && options.processEnv != null) {
+    processEnv = options.processEnv
+  }
+
+  DotenvModule.populate(processEnv, parsedAll, options)
+
+  if (lastError) {
+    return { parsed: parsedAll, error: lastError }
+  } else {
+    return { parsed: parsedAll }
   }
 }
 
 // Populates process.env from .env file
 function config (options) {
-  const vaultPath = _vaultPath(options)
-
   // fallback to original dotenv if DOTENV_KEY is not set
   if (_dotenvKey(options).length === 0) {
     return DotenvModule.configDotenv(options)
   }
 
+  const vaultPath = _vaultPath(options)
+
   // dotenvKey exists but .env.vault file does not exist
-  if (!fs.existsSync(vaultPath)) {
+  if (!vaultPath) {
     _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`)
 
     return DotenvModule.configDotenv(options)
@@ -4594,9 +4709,9 @@ function decrypt (encrypted, keyStr) {
   const key = Buffer.from(keyStr.slice(-64), 'hex')
   let ciphertext = Buffer.from(encrypted, 'base64')
 
-  const nonce = ciphertext.slice(0, 12)
-  const authTag = ciphertext.slice(-16)
-  ciphertext = ciphertext.slice(12, -16)
+  const nonce = ciphertext.subarray(0, 12)
+  const authTag = ciphertext.subarray(-16)
+  ciphertext = ciphertext.subarray(12, -16)
 
   try {
     const aesgcm = crypto.createDecipheriv('aes-256-gcm', key, nonce)
@@ -4608,14 +4723,14 @@ function decrypt (encrypted, keyStr) {
     const decryptionFailed = error.message === 'Unsupported state or unable to authenticate data'
 
     if (isRange || invalidKeyLength) {
-      const msg = 'INVALID_DOTENV_KEY: It must be 64 characters long (or more)'
-      throw new Error(msg)
+      const err = new Error('INVALID_DOTENV_KEY: It must be 64 characters long (or more)')
+      err.code = 'INVALID_DOTENV_KEY'
+      throw err
     } else if (decryptionFailed) {
-      const msg = 'DECRYPTION_FAILED: Please check your DOTENV_KEY'
-      throw new Error(msg)
+      const err = new Error('DECRYPTION_FAILED: Please check your DOTENV_KEY')
+      err.code = 'DECRYPTION_FAILED'
+      throw err
     } else {
-      console.error('Error: ', error.code)
-      console.error('Error: ', error.message)
       throw error
     }
   }
@@ -4627,7 +4742,9 @@ function populate (processEnv, parsed, options = {}) {
   const override = Boolean(options && options.override)
 
   if (typeof parsed !== 'object') {
-    throw new Error('OBJECT_REQUIRED: Please check the processEnv argument being passed to populate')
+    const err = new Error('OBJECT_REQUIRED: Please check the processEnv argument being passed to populate')
+    err.code = 'OBJECT_REQUIRED'
+    throw err
   }
 
   // Set process.env
@@ -4840,6 +4957,114 @@ function encodeUrl (url) {
     .replace(UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE)
     .replace(ENCODE_CHARS_REGEXP, encodeURI)
 }
+
+
+/***/ }),
+
+/***/ 6123:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var GetIntrinsic = __nccwpck_require__(4538);
+
+/** @type {import('.')} */
+var $defineProperty = GetIntrinsic('%Object.defineProperty%', true) || false;
+if ($defineProperty) {
+	try {
+		$defineProperty({}, 'a', { value: 1 });
+	} catch (e) {
+		// IE 8 has a broken defineProperty
+		$defineProperty = false;
+	}
+}
+
+module.exports = $defineProperty;
+
+
+/***/ }),
+
+/***/ 1933:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./eval')} */
+module.exports = EvalError;
+
+
+/***/ }),
+
+/***/ 8015:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('.')} */
+module.exports = Error;
+
+
+/***/ }),
+
+/***/ 4415:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./range')} */
+module.exports = RangeError;
+
+
+/***/ }),
+
+/***/ 6279:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./ref')} */
+module.exports = ReferenceError;
+
+
+/***/ }),
+
+/***/ 5474:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./syntax')} */
+module.exports = SyntaxError;
+
+
+/***/ }),
+
+/***/ 6361:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./type')} */
+module.exports = TypeError;
+
+
+/***/ }),
+
+/***/ 5065:
+/***/ ((module) => {
+
+"use strict";
+
+
+/** @type {import('./uri')} */
+module.exports = URIError;
 
 
 /***/ }),
@@ -6581,6 +6806,7 @@ module.exports = res
  */
 
 var charsetRegExp = /;\s*charset\s*=/;
+var schemaAndHostRegExp = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?\/\/[^\\\/\?]+/;
 
 /**
  * Set status `code`.
@@ -7430,15 +7656,23 @@ res.cookie = function (name, value, options) {
  */
 
 res.location = function location(url) {
-  var loc = url;
+  var loc;
 
   // "back" is an alias for the referrer
   if (url === 'back') {
     loc = this.req.get('Referrer') || '/';
+  } else {
+    loc = String(url);
   }
 
-  // set location
-  return this.set('Location', encodeUrl(loc));
+  var m = schemaAndHostRegExp.exec(loc);
+  var pos = m ? m[0].length + 1 : 0;
+
+  // Only encode after host to avoid invalid encoding which can introduce
+  // vulnerabilities (e.g. `\\` to `%5C`).
+  loc = loc.slice(0, pos) + encodeUrl(loc.slice(pos));
+
+  return this.set('Location', loc);
 };
 
 /**
@@ -7739,7 +7973,7 @@ var toString = Object.prototype.toString;
  * Initialize a new `Router` with the given `options`.
  *
  * @param {Object} [options]
- * @return {Router} which is an callable function
+ * @return {Router} which is a callable function
  * @public
  */
 
@@ -8633,7 +8867,10 @@ Route.prototype._handles_method = function _handles_method(method) {
     return true;
   }
 
-  var name = method.toLowerCase();
+  // normalize name
+  var name = typeof method === 'string'
+    ? method.toLowerCase()
+    : method
 
   if (name === 'head' && !this.methods['head']) {
     name = 'get';
@@ -8676,8 +8913,10 @@ Route.prototype.dispatch = function dispatch(req, res, done) {
   if (stack.length === 0) {
     return done();
   }
+  var method = typeof req.method === 'string'
+    ? req.method.toLowerCase()
+    : req.method
 
-  var method = req.method.toLowerCase();
   if (method === 'head' && !this.methods['head']) {
     method = 'get';
   }
@@ -8923,17 +9162,15 @@ exports.contentDisposition = deprecate.function(contentDisposition,
 /**
  * Parse accept params `str` returning an
  * object with `.value`, `.quality` and `.params`.
- * also includes `.originalIndex` for stable sorting
  *
  * @param {String} str
- * @param {Number} index
  * @return {Object}
  * @api private
  */
 
-function acceptParams(str, index) {
+function acceptParams (str) {
   var parts = str.split(/ *; */);
-  var ret = { value: parts[0], quality: 1, params: {}, originalIndex: index };
+  var ret = { value: parts[0], quality: 1, params: {} }
 
   for (var i = 1; i < parts.length; ++i) {
     var pms = parts[i].split(/ *= */);
@@ -9088,6 +9325,7 @@ function createETagGenerator (options) {
 /**
  * Parse an extended query string with qs.
  *
+ * @param {String} str
  * @return {Object}
  * @private
  */
@@ -11562,43 +11800,75 @@ function parseTokenList (str) {
 /* eslint no-invalid-this: 1 */
 
 var ERROR_MESSAGE = 'Function.prototype.bind called on incompatible ';
-var slice = Array.prototype.slice;
 var toStr = Object.prototype.toString;
+var max = Math.max;
 var funcType = '[object Function]';
+
+var concatty = function concatty(a, b) {
+    var arr = [];
+
+    for (var i = 0; i < a.length; i += 1) {
+        arr[i] = a[i];
+    }
+    for (var j = 0; j < b.length; j += 1) {
+        arr[j + a.length] = b[j];
+    }
+
+    return arr;
+};
+
+var slicy = function slicy(arrLike, offset) {
+    var arr = [];
+    for (var i = offset || 0, j = 0; i < arrLike.length; i += 1, j += 1) {
+        arr[j] = arrLike[i];
+    }
+    return arr;
+};
+
+var joiny = function (arr, joiner) {
+    var str = '';
+    for (var i = 0; i < arr.length; i += 1) {
+        str += arr[i];
+        if (i + 1 < arr.length) {
+            str += joiner;
+        }
+    }
+    return str;
+};
 
 module.exports = function bind(that) {
     var target = this;
-    if (typeof target !== 'function' || toStr.call(target) !== funcType) {
+    if (typeof target !== 'function' || toStr.apply(target) !== funcType) {
         throw new TypeError(ERROR_MESSAGE + target);
     }
-    var args = slice.call(arguments, 1);
+    var args = slicy(arguments, 1);
 
     var bound;
     var binder = function () {
         if (this instanceof bound) {
             var result = target.apply(
                 this,
-                args.concat(slice.call(arguments))
+                concatty(args, arguments)
             );
             if (Object(result) === result) {
                 return result;
             }
             return this;
-        } else {
-            return target.apply(
-                that,
-                args.concat(slice.call(arguments))
-            );
         }
+        return target.apply(
+            that,
+            concatty(args, arguments)
+        );
+
     };
 
-    var boundLength = Math.max(0, target.length - args.length);
+    var boundLength = max(0, target.length - args.length);
     var boundArgs = [];
     for (var i = 0; i < boundLength; i++) {
-        boundArgs.push('$' + i);
+        boundArgs[i] = '$' + i;
     }
 
-    bound = Function('binder', 'return function (' + boundArgs.join(',') + '){ return binder.apply(this,arguments); }')(binder);
+    bound = Function('binder', 'return function (' + joiny(boundArgs, ',') + '){ return binder.apply(this,arguments); }')(binder);
 
     if (target.prototype) {
         var Empty = function Empty() {};
@@ -11634,9 +11904,15 @@ module.exports = Function.prototype.bind || implementation;
 
 var undefined;
 
-var $SyntaxError = SyntaxError;
+var $Error = __nccwpck_require__(8015);
+var $EvalError = __nccwpck_require__(1933);
+var $RangeError = __nccwpck_require__(4415);
+var $ReferenceError = __nccwpck_require__(6279);
+var $SyntaxError = __nccwpck_require__(5474);
+var $TypeError = __nccwpck_require__(6361);
+var $URIError = __nccwpck_require__(5065);
+
 var $Function = Function;
-var $TypeError = TypeError;
 
 // eslint-disable-next-line consistent-return
 var getEvalledConstructor = function (expressionSyntax) {
@@ -11675,18 +11951,24 @@ var ThrowTypeError = $gOPD
 	: throwTypeError;
 
 var hasSymbols = __nccwpck_require__(587)();
+var hasProto = __nccwpck_require__(5894)();
 
-var getProto = Object.getPrototypeOf || function (x) { return x.__proto__; }; // eslint-disable-line no-proto
+var getProto = Object.getPrototypeOf || (
+	hasProto
+		? function (x) { return x.__proto__; } // eslint-disable-line no-proto
+		: null
+);
 
 var needsEval = {};
 
-var TypedArray = typeof Uint8Array === 'undefined' ? undefined : getProto(Uint8Array);
+var TypedArray = typeof Uint8Array === 'undefined' || !getProto ? undefined : getProto(Uint8Array);
 
 var INTRINSICS = {
+	__proto__: null,
 	'%AggregateError%': typeof AggregateError === 'undefined' ? undefined : AggregateError,
 	'%Array%': Array,
 	'%ArrayBuffer%': typeof ArrayBuffer === 'undefined' ? undefined : ArrayBuffer,
-	'%ArrayIteratorPrototype%': hasSymbols ? getProto([][Symbol.iterator]()) : undefined,
+	'%ArrayIteratorPrototype%': hasSymbols && getProto ? getProto([][Symbol.iterator]()) : undefined,
 	'%AsyncFromSyncIteratorPrototype%': undefined,
 	'%AsyncFunction%': needsEval,
 	'%AsyncGenerator%': needsEval,
@@ -11694,6 +11976,8 @@ var INTRINSICS = {
 	'%AsyncIteratorPrototype%': needsEval,
 	'%Atomics%': typeof Atomics === 'undefined' ? undefined : Atomics,
 	'%BigInt%': typeof BigInt === 'undefined' ? undefined : BigInt,
+	'%BigInt64Array%': typeof BigInt64Array === 'undefined' ? undefined : BigInt64Array,
+	'%BigUint64Array%': typeof BigUint64Array === 'undefined' ? undefined : BigUint64Array,
 	'%Boolean%': Boolean,
 	'%DataView%': typeof DataView === 'undefined' ? undefined : DataView,
 	'%Date%': Date,
@@ -11701,9 +11985,9 @@ var INTRINSICS = {
 	'%decodeURIComponent%': decodeURIComponent,
 	'%encodeURI%': encodeURI,
 	'%encodeURIComponent%': encodeURIComponent,
-	'%Error%': Error,
+	'%Error%': $Error,
 	'%eval%': eval, // eslint-disable-line no-eval
-	'%EvalError%': EvalError,
+	'%EvalError%': $EvalError,
 	'%Float32Array%': typeof Float32Array === 'undefined' ? undefined : Float32Array,
 	'%Float64Array%': typeof Float64Array === 'undefined' ? undefined : Float64Array,
 	'%FinalizationRegistry%': typeof FinalizationRegistry === 'undefined' ? undefined : FinalizationRegistry,
@@ -11714,10 +11998,10 @@ var INTRINSICS = {
 	'%Int32Array%': typeof Int32Array === 'undefined' ? undefined : Int32Array,
 	'%isFinite%': isFinite,
 	'%isNaN%': isNaN,
-	'%IteratorPrototype%': hasSymbols ? getProto(getProto([][Symbol.iterator]())) : undefined,
+	'%IteratorPrototype%': hasSymbols && getProto ? getProto(getProto([][Symbol.iterator]())) : undefined,
 	'%JSON%': typeof JSON === 'object' ? JSON : undefined,
 	'%Map%': typeof Map === 'undefined' ? undefined : Map,
-	'%MapIteratorPrototype%': typeof Map === 'undefined' || !hasSymbols ? undefined : getProto(new Map()[Symbol.iterator]()),
+	'%MapIteratorPrototype%': typeof Map === 'undefined' || !hasSymbols || !getProto ? undefined : getProto(new Map()[Symbol.iterator]()),
 	'%Math%': Math,
 	'%Number%': Number,
 	'%Object%': Object,
@@ -11725,15 +12009,15 @@ var INTRINSICS = {
 	'%parseInt%': parseInt,
 	'%Promise%': typeof Promise === 'undefined' ? undefined : Promise,
 	'%Proxy%': typeof Proxy === 'undefined' ? undefined : Proxy,
-	'%RangeError%': RangeError,
-	'%ReferenceError%': ReferenceError,
+	'%RangeError%': $RangeError,
+	'%ReferenceError%': $ReferenceError,
 	'%Reflect%': typeof Reflect === 'undefined' ? undefined : Reflect,
 	'%RegExp%': RegExp,
 	'%Set%': typeof Set === 'undefined' ? undefined : Set,
-	'%SetIteratorPrototype%': typeof Set === 'undefined' || !hasSymbols ? undefined : getProto(new Set()[Symbol.iterator]()),
+	'%SetIteratorPrototype%': typeof Set === 'undefined' || !hasSymbols || !getProto ? undefined : getProto(new Set()[Symbol.iterator]()),
 	'%SharedArrayBuffer%': typeof SharedArrayBuffer === 'undefined' ? undefined : SharedArrayBuffer,
 	'%String%': String,
-	'%StringIteratorPrototype%': hasSymbols ? getProto(''[Symbol.iterator]()) : undefined,
+	'%StringIteratorPrototype%': hasSymbols && getProto ? getProto(''[Symbol.iterator]()) : undefined,
 	'%Symbol%': hasSymbols ? Symbol : undefined,
 	'%SyntaxError%': $SyntaxError,
 	'%ThrowTypeError%': ThrowTypeError,
@@ -11743,11 +12027,21 @@ var INTRINSICS = {
 	'%Uint8ClampedArray%': typeof Uint8ClampedArray === 'undefined' ? undefined : Uint8ClampedArray,
 	'%Uint16Array%': typeof Uint16Array === 'undefined' ? undefined : Uint16Array,
 	'%Uint32Array%': typeof Uint32Array === 'undefined' ? undefined : Uint32Array,
-	'%URIError%': URIError,
+	'%URIError%': $URIError,
 	'%WeakMap%': typeof WeakMap === 'undefined' ? undefined : WeakMap,
 	'%WeakRef%': typeof WeakRef === 'undefined' ? undefined : WeakRef,
 	'%WeakSet%': typeof WeakSet === 'undefined' ? undefined : WeakSet
 };
+
+if (getProto) {
+	try {
+		null.error; // eslint-disable-line no-unused-expressions
+	} catch (e) {
+		// https://github.com/tc39/proposal-shadowrealm/pull/384#issuecomment-1364264229
+		var errorProto = getProto(getProto(e));
+		INTRINSICS['%Error.prototype%'] = errorProto;
+	}
+}
 
 var doEval = function doEval(name) {
 	var value;
@@ -11764,7 +12058,7 @@ var doEval = function doEval(name) {
 		}
 	} else if (name === '%AsyncIteratorPrototype%') {
 		var gen = doEval('%AsyncGenerator%');
-		if (gen) {
+		if (gen && getProto) {
 			value = getProto(gen.prototype);
 		}
 	}
@@ -11775,6 +12069,7 @@ var doEval = function doEval(name) {
 };
 
 var LEGACY_ALIASES = {
+	__proto__: null,
 	'%ArrayBufferPrototype%': ['ArrayBuffer', 'prototype'],
 	'%ArrayPrototype%': ['Array', 'prototype'],
 	'%ArrayProto_entries%': ['Array', 'prototype', 'entries'],
@@ -11829,7 +12124,7 @@ var LEGACY_ALIASES = {
 };
 
 var bind = __nccwpck_require__(8334);
-var hasOwn = __nccwpck_require__(6339);
+var hasOwn = __nccwpck_require__(2157);
 var $concat = bind.call(Function.call, Array.prototype.concat);
 var $spliceApply = bind.call(Function.apply, Array.prototype.splice);
 var $replace = bind.call(Function.call, String.prototype.replace);
@@ -11968,6 +12263,83 @@ module.exports = function GetIntrinsic(name, allowMissing) {
 
 /***/ }),
 
+/***/ 8501:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var GetIntrinsic = __nccwpck_require__(4538);
+
+var $gOPD = GetIntrinsic('%Object.getOwnPropertyDescriptor%', true);
+
+if ($gOPD) {
+	try {
+		$gOPD([], 'length');
+	} catch (e) {
+		// IE 8 has a broken gOPD
+		$gOPD = null;
+	}
+}
+
+module.exports = $gOPD;
+
+
+/***/ }),
+
+/***/ 176:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var $defineProperty = __nccwpck_require__(6123);
+
+var hasPropertyDescriptors = function hasPropertyDescriptors() {
+	return !!$defineProperty;
+};
+
+hasPropertyDescriptors.hasArrayLengthDefineBug = function hasArrayLengthDefineBug() {
+	// node v0.6 has a bug where array lengths can be Set but not Defined
+	if (!$defineProperty) {
+		return null;
+	}
+	try {
+		return $defineProperty([], 'length', { value: 1 }).length !== 1;
+	} catch (e) {
+		// In Firefox 4-22, defining length on an array throws an exception.
+		return true;
+	}
+};
+
+module.exports = hasPropertyDescriptors;
+
+
+/***/ }),
+
+/***/ 5894:
+/***/ ((module) => {
+
+"use strict";
+
+
+var test = {
+	__proto__: null,
+	foo: {}
+};
+
+var $Object = Object;
+
+/** @type {import('.')} */
+module.exports = function hasProto() {
+	// @ts-expect-error: TS errors on an inherited property for some reason
+	return { __proto__: test }.foo === test.foo
+		&& !(test instanceof $Object);
+};
+
+
+/***/ }),
+
 /***/ 587:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -12039,15 +12411,18 @@ module.exports = function hasSymbols() {
 
 /***/ }),
 
-/***/ 6339:
+/***/ 2157:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
 
 
+var call = Function.prototype.call;
+var $hasOwn = Object.prototype.hasOwnProperty;
 var bind = __nccwpck_require__(8334);
 
-module.exports = bind.call(Function.call, Object.prototype.hasOwnProperty);
+/** @type {import('.')} */
+module.exports = bind.call(call, $hasOwn);
 
 
 /***/ }),
@@ -21844,16 +22219,20 @@ module.exports = function inspect_(obj, options, depth, seen) {
     }
     if (isMap(obj)) {
         var mapParts = [];
-        mapForEach.call(obj, function (value, key) {
-            mapParts.push(inspect(key, obj, true) + ' => ' + inspect(value, obj));
-        });
+        if (mapForEach) {
+            mapForEach.call(obj, function (value, key) {
+                mapParts.push(inspect(key, obj, true) + ' => ' + inspect(value, obj));
+            });
+        }
         return collectionOf('Map', mapSize.call(obj), mapParts, indent);
     }
     if (isSet(obj)) {
         var setParts = [];
-        setForEach.call(obj, function (value) {
-            setParts.push(inspect(value, obj));
-        });
+        if (setForEach) {
+            setForEach.call(obj, function (value) {
+                setParts.push(inspect(value, obj));
+            });
+        }
         return collectionOf('Set', setSize.call(obj), setParts, indent);
     }
     if (isWeakMap(obj)) {
@@ -21876,6 +22255,14 @@ module.exports = function inspect_(obj, options, depth, seen) {
     }
     if (isString(obj)) {
         return markBoxed(inspect(String(obj)));
+    }
+    // note: in IE 8, sometimes `global !== window` but both are the prototypes of each other
+    /* eslint-env browser */
+    if (typeof window !== 'undefined' && obj === window) {
+        return '{ [object Window] }';
+    }
+    if (obj === global) {
+        return '{ [object globalThis] }';
     }
     if (!isDate(obj) && !isRegExp(obj)) {
         var ys = arrObjKeys(obj, inspect);
@@ -24202,6 +24589,13 @@ function getDecoder (encoding) {
 function getRawBody (stream, options, callback) {
   var done = callback
   var opts = options || {}
+
+  // light validation
+  if (stream === undefined) {
+    throw new TypeError('argument stream is required')
+  } else if (typeof stream !== 'object' || stream === null || typeof stream.on !== 'function') {
+    throw new TypeError('argument stream must be a stream')
+  }
 
   if (options === true || typeof options === 'string') {
     // short cut for encoding
@@ -26992,6 +27386,58 @@ function createRedirectDirectoryListener () {
 
 /***/ }),
 
+/***/ 4056:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var GetIntrinsic = __nccwpck_require__(4538);
+var define = __nccwpck_require__(4564);
+var hasDescriptors = __nccwpck_require__(176)();
+var gOPD = __nccwpck_require__(8501);
+
+var $TypeError = __nccwpck_require__(6361);
+var $floor = GetIntrinsic('%Math.floor%');
+
+/** @typedef {(...args: unknown[]) => unknown} Func */
+
+/** @type {<T extends Func = Func>(fn: T, length: number, loose?: boolean) => T} */
+module.exports = function setFunctionLength(fn, length) {
+	if (typeof fn !== 'function') {
+		throw new $TypeError('`fn` is not a function');
+	}
+	if (typeof length !== 'number' || length < 0 || length > 0xFFFFFFFF || $floor(length) !== length) {
+		throw new $TypeError('`length` must be a positive 32-bit integer');
+	}
+
+	var loose = arguments.length > 2 && !!arguments[2];
+
+	var functionLengthIsConfigurable = true;
+	var functionLengthIsWritable = true;
+	if ('length' in fn && gOPD) {
+		var desc = gOPD(fn, 'length');
+		if (desc && !desc.configurable) {
+			functionLengthIsConfigurable = false;
+		}
+		if (desc && !desc.writable) {
+			functionLengthIsWritable = false;
+		}
+	}
+
+	if (functionLengthIsConfigurable || functionLengthIsWritable || !loose) {
+		if (hasDescriptors) {
+			define(/** @type {Parameters<define>[0]} */ (fn), 'length', length, true, true);
+		} else {
+			define(/** @type {Parameters<define>[0]} */ (fn), 'length', length);
+		}
+	}
+	return fn;
+};
+
+
+/***/ }),
+
 /***/ 414:
 /***/ ((module) => {
 
@@ -27027,7 +27473,7 @@ var GetIntrinsic = __nccwpck_require__(4538);
 var callBound = __nccwpck_require__(8803);
 var inspect = __nccwpck_require__(504);
 
-var $TypeError = GetIntrinsic('%TypeError%');
+var $TypeError = __nccwpck_require__(6361);
 var $WeakMap = GetIntrinsic('%WeakMap%', true);
 var $Map = GetIntrinsic('%Map%', true);
 
@@ -27039,49 +27485,58 @@ var $mapSet = callBound('Map.prototype.set', true);
 var $mapHas = callBound('Map.prototype.has', true);
 
 /*
- * This function traverses the list returning the node corresponding to the
- * given key.
- *
- * That node is also moved to the head of the list, so that if it's accessed
- * again we don't need to traverse the whole list. By doing so, all the recently
- * used nodes can be accessed relatively quickly.
- */
+* This function traverses the list returning the node corresponding to the given key.
+*
+* That node is also moved to the head of the list, so that if it's accessed again we don't need to traverse the whole list. By doing so, all the recently used nodes can be accessed relatively quickly.
+*/
+/** @type {import('.').listGetNode} */
 var listGetNode = function (list, key) { // eslint-disable-line consistent-return
-	for (var prev = list, curr; (curr = prev.next) !== null; prev = curr) {
+	/** @type {typeof list | NonNullable<(typeof list)['next']>} */
+	var prev = list;
+	/** @type {(typeof list)['next']} */
+	var curr;
+	for (; (curr = prev.next) !== null; prev = curr) {
 		if (curr.key === key) {
 			prev.next = curr.next;
-			curr.next = list.next;
+			// eslint-disable-next-line no-extra-parens
+			curr.next = /** @type {NonNullable<typeof list.next>} */ (list.next);
 			list.next = curr; // eslint-disable-line no-param-reassign
 			return curr;
 		}
 	}
 };
 
+/** @type {import('.').listGet} */
 var listGet = function (objects, key) {
 	var node = listGetNode(objects, key);
 	return node && node.value;
 };
+/** @type {import('.').listSet} */
 var listSet = function (objects, key, value) {
 	var node = listGetNode(objects, key);
 	if (node) {
 		node.value = value;
 	} else {
 		// Prepend the new node to the beginning of the list
-		objects.next = { // eslint-disable-line no-param-reassign
+		objects.next = /** @type {import('.').ListNode<typeof value>} */ ({ // eslint-disable-line no-param-reassign, no-extra-parens
 			key: key,
 			next: objects.next,
 			value: value
-		};
+		});
 	}
 };
+/** @type {import('.').listHas} */
 var listHas = function (objects, key) {
 	return !!listGetNode(objects, key);
 };
 
+/** @type {import('.')} */
 module.exports = function getSideChannel() {
-	var $wm;
-	var $m;
-	var $o;
+	/** @type {WeakMap<object, unknown>} */ var $wm;
+	/** @type {Map<object, unknown>} */ var $m;
+	/** @type {import('.').RootNode<unknown>} */ var $o;
+
+	/** @type {import('.').Channel} */
 	var channel = {
 		assert: function (key) {
 			if (!channel.has(key)) {
@@ -27132,11 +27587,7 @@ module.exports = function getSideChannel() {
 				$mapSet($m, key, value);
 			} else {
 				if (!$o) {
-					/*
-					 * Initialize the linked list as an empty node, so that we don't have
-					 * to special-case handling of the first node: we can always refer to
-					 * it as (previous node).next, instead of something like (list).head
-					 */
+					// Initialize the linked list as an empty node, so that we don't have to special-case handling of the first node: we can always refer to it as (previous node).next, instead of something like (list).head
 					$o = { key: {}, next: null };
 				}
 				listSet($o, key, value);
@@ -31990,6 +32441,7 @@ const toml = __nccwpck_require__(4920);
 const yaml = __nccwpck_require__(1917);
 const fs = __nccwpck_require__(7147);
 const crypto = __nccwpck_require__(6113);
+const console = __nccwpck_require__(6206);
 
 // Function to process provided route file
 // Allowed formats are TOML, JSON, YAML
@@ -31999,7 +32451,7 @@ async function processRouteFile(routeFile) {
   // If the content is not one of these formats, throw an error
   let routeFileContent = fs.readFileSync(routeFile, 'utf-8');
 
-  let routeFileContentType = routeFile.split('.').pop().toLowerCase();
+  const routeFileContentType = routeFile.split('.').pop().toLowerCase();
 
   if (routeFileContentType === 'toml') {
     routeFileContent = toml.parse(routeFileContent);
@@ -32022,11 +32474,11 @@ async function getTargetUrl(owner, repo) {
 
   // Find a target match based on owner/repo or fallback to owner based route
   if (targetRoutes[owner] && targetRoutes[owner][repo]) {
-    let route = targetRoutes[owner][repo];
+    const route = targetRoutes[owner][repo];
     console.log(`Routing ${owner}/${repo} to ${route['target']}`);
     return route.target;
   } else if (targetRoutes[owner]) {
-    let route = targetRoutes[owner];
+    const route = targetRoutes[owner];
     console.log(`Org target match, routing ${owner}/${repo} to ${route['target']}`);
     return route.target;
   } else {
@@ -32040,13 +32492,13 @@ async function listRoutes() {
   const targetRoutes = await processRouteFile(config.routeFile);
   // process the targetRoutes object and output a list of all routes
   // Object structure is{owner: {target: 'url', repo: {target: 'url'}}}
-  let routes = [];
+  const routes = [];
 
   // Loop through the targetRoutes object and build the routes array
   // If the owner has a target, add it to the routes array
   // If the owner has repos, loop through them and add their targets to the routes array
   // Adds an object in format {owner: {target: 'url'}}
-  for (let owner in targetRoutes) {
+  for (const owner in targetRoutes) {
     if (targetRoutes[owner].target) {
       routes.push({
         owner: owner,
@@ -32056,7 +32508,7 @@ async function listRoutes() {
     // If the owner has other keys, loop through them and add their targets to the routes array
     // Adds an object in format {owner: {repo: {target: 'url'}}}
     if (Object.keys(targetRoutes[owner]).length > 1) {
-      for (let repo in targetRoutes[owner]) {
+      for (const repo in targetRoutes[owner]) {
         if (repo !== 'target') {
           routes.push({
             owner: owner,
@@ -32076,14 +32528,14 @@ async function listRouteHandler(req, res) {
     const routes = await listRoutes();
 
     if (req.query.format === 'json') {
-      let response = JSON.stringify(routes);
+      const response = JSON.stringify(routes);
       res.setHeader('Content-Type', 'application/json');
       res.status(200).send(response);
     } else {
       res.setHeader('Content-Type', 'text/plain');
 
       // Map the routes array to a string with one route per line
-      let response = routes.map(route => {
+      const response = routes.map(route => {
         if (route.repo) {
           return `${route.owner}/${route.repo} -> ${route.target}`;
         } else {
@@ -32152,7 +32604,7 @@ async function webhookHandler(req, res) {
     // Process commit webhook events
     if (payload.ref && payload.commits) {
       console.log(`${payload.repository.full_name}: Commit event received for ref ${payload.ref}`);
-      let targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
+      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
       if (targetUrl) {
         await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
       }
@@ -32161,7 +32613,7 @@ async function webhookHandler(req, res) {
     // Process pull request webhook events
     if (payload.pull_request) {
       console.log(`${payload.repository.full_name}: Pull request event received for pull request #${payload.pull_request.number}`);
-      let targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
+      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
       if (targetUrl) {
         await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
       }
@@ -32218,6 +32670,14 @@ module.exports = require("async_hooks");
 
 "use strict";
 module.exports = require("buffer");
+
+/***/ }),
+
+/***/ 6206:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("console");
 
 /***/ }),
 
@@ -32334,7 +32794,7 @@ module.exports = require("zlib");
 /***/ }),
 
 /***/ 8604:
-/***/ ((module) => {
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
 
@@ -32365,51 +32825,518 @@ __export(source_exports, {
 });
 module.exports = __toCommonJS(source_exports);
 
-// source/memory-store.ts
-var calculateNextResetTime = (windowMs) => {
-  const resetTime = new Date();
-  resetTime.setMilliseconds(resetTime.getMilliseconds() + windowMs);
-  return resetTime;
+// source/headers.ts
+var getResetSeconds = (resetTime, windowMs) => {
+  let resetSeconds = void 0;
+  if (resetTime) {
+    const deltaSeconds = Math.ceil((resetTime.getTime() - Date.now()) / 1e3);
+    resetSeconds = Math.max(0, deltaSeconds);
+  } else if (windowMs) {
+    resetSeconds = Math.ceil(windowMs / 1e3);
+  }
+  return resetSeconds;
 };
+var setLegacyHeaders = (response, info) => {
+  if (response.headersSent)
+    return;
+  response.setHeader("X-RateLimit-Limit", info.limit.toString());
+  response.setHeader("X-RateLimit-Remaining", info.remaining.toString());
+  if (info.resetTime instanceof Date) {
+    response.setHeader("Date", (/* @__PURE__ */ new Date()).toUTCString());
+    response.setHeader(
+      "X-RateLimit-Reset",
+      Math.ceil(info.resetTime.getTime() / 1e3).toString()
+    );
+  }
+};
+var setDraft6Headers = (response, info, windowMs) => {
+  if (response.headersSent)
+    return;
+  const windowSeconds = Math.ceil(windowMs / 1e3);
+  const resetSeconds = getResetSeconds(info.resetTime);
+  response.setHeader("RateLimit-Policy", `${info.limit};w=${windowSeconds}`);
+  response.setHeader("RateLimit-Limit", info.limit.toString());
+  response.setHeader("RateLimit-Remaining", info.remaining.toString());
+  if (resetSeconds)
+    response.setHeader("RateLimit-Reset", resetSeconds.toString());
+};
+var setDraft7Headers = (response, info, windowMs) => {
+  if (response.headersSent)
+    return;
+  const windowSeconds = Math.ceil(windowMs / 1e3);
+  const resetSeconds = getResetSeconds(info.resetTime, windowMs);
+  response.setHeader("RateLimit-Policy", `${info.limit};w=${windowSeconds}`);
+  response.setHeader(
+    "RateLimit",
+    `limit=${info.limit}, remaining=${info.remaining}, reset=${resetSeconds}`
+  );
+};
+var setRetryAfterHeader = (response, info, windowMs) => {
+  if (response.headersSent)
+    return;
+  const resetSeconds = getResetSeconds(info.resetTime, windowMs);
+  response.setHeader("Retry-After", resetSeconds.toString());
+};
+
+// source/validations.ts
+var import_node_net = __nccwpck_require__(1808);
+var ValidationError = class extends Error {
+  /**
+   * The code must be a string, in snake case and all capital, that starts with
+   * the substring `ERR_ERL_`.
+   *
+   * The message must be a string, starting with an uppercase character,
+   * describing the issue in detail.
+   */
+  constructor(code, message) {
+    const url = `https://express-rate-limit.github.io/${code}/`;
+    super(`${message} See ${url} for more information.`);
+    this.name = this.constructor.name;
+    this.code = code;
+    this.help = url;
+  }
+};
+var ChangeWarning = class extends ValidationError {
+};
+var usedStores = /* @__PURE__ */ new Set();
+var singleCountKeys = /* @__PURE__ */ new WeakMap();
+var validations = {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  enabled: {
+    default: true
+  },
+  // Should be EnabledValidations type, but that's a circular reference
+  disable() {
+    for (const k of Object.keys(this.enabled))
+      this.enabled[k] = false;
+  },
+  /**
+   * Checks whether the IP address is valid, and that it does not have a port
+   * number in it.
+   *
+   * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_invalid_ip_address.
+   *
+   * @param ip {string | undefined} - The IP address provided by Express as request.ip.
+   *
+   * @returns {void}
+   */
+  ip(ip) {
+    if (ip === void 0) {
+      throw new ValidationError(
+        "ERR_ERL_UNDEFINED_IP_ADDRESS",
+        `An undefined 'request.ip' was detected. This might indicate a misconfiguration or the connection being destroyed prematurely.`
+      );
+    }
+    if (!(0, import_node_net.isIP)(ip)) {
+      throw new ValidationError(
+        "ERR_ERL_INVALID_IP_ADDRESS",
+        `An invalid 'request.ip' (${ip}) was detected. Consider passing a custom 'keyGenerator' function to the rate limiter.`
+      );
+    }
+  },
+  /**
+   * Makes sure the trust proxy setting is not set to `true`.
+   *
+   * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_permissive_trust_proxy.
+   *
+   * @param request {Request} - The Express request object.
+   *
+   * @returns {void}
+   */
+  trustProxy(request) {
+    if (request.app.get("trust proxy") === true) {
+      throw new ValidationError(
+        "ERR_ERL_PERMISSIVE_TRUST_PROXY",
+        `The Express 'trust proxy' setting is true, which allows anyone to trivially bypass IP-based rate limiting.`
+      );
+    }
+  },
+  /**
+   * Makes sure the trust proxy setting is set in case the `X-Forwarded-For`
+   * header is present.
+   *
+   * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_unset_trust_proxy.
+   *
+   * @param request {Request} - The Express request object.
+   *
+   * @returns {void}
+   */
+  xForwardedForHeader(request) {
+    if (request.headers["x-forwarded-for"] && request.app.get("trust proxy") === false) {
+      throw new ValidationError(
+        "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR",
+        `The 'X-Forwarded-For' header is set but the Express 'trust proxy' setting is false (default). This could indicate a misconfiguration which would prevent express-rate-limit from accurately identifying users.`
+      );
+    }
+  },
+  /**
+   * Ensures totalHits value from store is a positive integer.
+   *
+   * @param hits {any} - The `totalHits` returned by the store.
+   */
+  positiveHits(hits) {
+    if (typeof hits !== "number" || hits < 1 || hits !== Math.round(hits)) {
+      throw new ValidationError(
+        "ERR_ERL_INVALID_HITS",
+        `The totalHits value returned from the store must be a positive integer, got ${hits}`
+      );
+    }
+  },
+  /**
+   * Ensures a single store instance is not used with multiple express-rate-limit instances
+   */
+  unsharedStore(store) {
+    if (usedStores.has(store)) {
+      const maybeUniquePrefix = store?.localKeys ? "" : " (with a unique prefix)";
+      throw new ValidationError(
+        "ERR_ERL_STORE_REUSE",
+        `A Store instance must not be shared across multiple rate limiters. Create a new instance of ${store.constructor.name}${maybeUniquePrefix} for each limiter instead.`
+      );
+    }
+    usedStores.add(store);
+  },
+  /**
+   * Ensures a given key is incremented only once per request.
+   *
+   * @param request {Request} - The Express request object.
+   * @param store {Store} - The store class.
+   * @param key {string} - The key used to store the client's hit count.
+   *
+   * @returns {void}
+   */
+  singleCount(request, store, key) {
+    let storeKeys = singleCountKeys.get(request);
+    if (!storeKeys) {
+      storeKeys = /* @__PURE__ */ new Map();
+      singleCountKeys.set(request, storeKeys);
+    }
+    const storeKey = store.localKeys ? store : store.constructor.name;
+    let keys = storeKeys.get(storeKey);
+    if (!keys) {
+      keys = [];
+      storeKeys.set(storeKey, keys);
+    }
+    const prefixedKey = `${store.prefix ?? ""}${key}`;
+    if (keys.includes(prefixedKey)) {
+      throw new ValidationError(
+        "ERR_ERL_DOUBLE_COUNT",
+        `The hit count for ${key} was incremented more than once for a single request.`
+      );
+    }
+    keys.push(prefixedKey);
+  },
+  /**
+   * Warns the user that the behaviour for `max: 0` / `limit: 0` is
+   * changing in the next major release.
+   *
+   * @param limit {number} - The maximum number of hits per client.
+   *
+   * @returns {void}
+   */
+  limit(limit) {
+    if (limit === 0) {
+      throw new ChangeWarning(
+        "WRN_ERL_MAX_ZERO",
+        `Setting limit or max to 0 disables rate limiting in express-rate-limit v6 and older, but will cause all requests to be blocked in v7`
+      );
+    }
+  },
+  /**
+   * Warns the user that the `draft_polli_ratelimit_headers` option is deprecated
+   * and will be removed in the next major release.
+   *
+   * @param draft_polli_ratelimit_headers {any | undefined} - The now-deprecated setting that was used to enable standard headers.
+   *
+   * @returns {void}
+   */
+  draftPolliHeaders(draft_polli_ratelimit_headers) {
+    if (draft_polli_ratelimit_headers) {
+      throw new ChangeWarning(
+        "WRN_ERL_DEPRECATED_DRAFT_POLLI_HEADERS",
+        `The draft_polli_ratelimit_headers configuration option is deprecated and has been removed in express-rate-limit v7, please set standardHeaders: 'draft-6' instead.`
+      );
+    }
+  },
+  /**
+   * Warns the user that the `onLimitReached` option is deprecated and
+   * will be removed in the next major release.
+   *
+   * @param onLimitReached {any | undefined} - The maximum number of hits per client.
+   *
+   * @returns {void}
+   */
+  onLimitReached(onLimitReached) {
+    if (onLimitReached) {
+      throw new ChangeWarning(
+        "WRN_ERL_DEPRECATED_ON_LIMIT_REACHED",
+        `The onLimitReached configuration option is deprecated and has been removed in express-rate-limit v7.`
+      );
+    }
+  },
+  /**
+   * Warns the user when the selected headers option requires a reset time but
+   * the store does not provide one.
+   *
+   * @param resetTime {Date | undefined} - The timestamp when the client's hit count will be reset.
+   *
+   * @returns {void}
+   */
+  headersResetTime(resetTime) {
+    if (!resetTime) {
+      throw new ValidationError(
+        "ERR_ERL_HEADERS_NO_RESET",
+        `standardHeaders:  'draft-7' requires a 'resetTime', but the store did not provide one. The 'windowMs' value will be used instead, which may cause clients to wait longer than necessary.`
+      );
+    }
+  },
+  /**
+   * Checks the options.validate setting to ensure that only recognized
+   * validations are enabled or disabled.
+   *
+   * If any unrecognized values are found, an error is logged that
+   * includes the list of supported vaidations.
+   */
+  validationsConfig() {
+    const supportedValidations = Object.keys(this).filter(
+      (k) => !["enabled", "disable"].includes(k)
+    );
+    supportedValidations.push("default");
+    for (const key of Object.keys(this.enabled)) {
+      if (!supportedValidations.includes(key)) {
+        throw new ValidationError(
+          "ERR_ERL_UNKNOWN_VALIDATION",
+          `options.validate.${key} is not recognized. Supported validate options are: ${supportedValidations.join(
+            ", "
+          )}.`
+        );
+      }
+    }
+  },
+  /**
+   * Checks to see if the instance was created inside of a request handler,
+   * which would prevent it from working correctly, with the default memory
+   * store (or any other store with localKeys.)
+   */
+  creationStack(store) {
+    const { stack } = new Error(
+      "express-rate-limit validation check (set options.validate.creationStack=false to disable)"
+    );
+    if (stack?.includes("Layer.handle [as handle_request]")) {
+      if (!store.localKeys) {
+        throw new ValidationError(
+          "ERR_ERL_CREATED_IN_REQUEST_HANDLER",
+          "express-rate-limit instance should *usually* be created at app initialization, not when responding to a request."
+        );
+      }
+      throw new ValidationError(
+        "ERR_ERL_CREATED_IN_REQUEST_HANDLER",
+        `express-rate-limit instance should be created at app initialization, not when responding to a request.`
+      );
+    }
+  }
+};
+var getValidations = (_enabled) => {
+  let enabled;
+  if (typeof _enabled === "boolean") {
+    enabled = {
+      default: _enabled
+    };
+  } else {
+    enabled = {
+      default: true,
+      ..._enabled
+    };
+  }
+  const wrappedValidations = {
+    enabled
+  };
+  for (const [name, validation] of Object.entries(validations)) {
+    if (typeof validation === "function")
+      wrappedValidations[name] = (...args) => {
+        if (!(enabled[name] ?? enabled.default)) {
+          return;
+        }
+        try {
+          ;
+          validation.apply(
+            wrappedValidations,
+            args
+          );
+        } catch (error) {
+          if (error instanceof ChangeWarning)
+            console.warn(error);
+          else
+            console.error(error);
+        }
+      };
+  }
+  return wrappedValidations;
+};
+
+// source/memory-store.ts
 var MemoryStore = class {
+  constructor() {
+    /**
+     * These two maps store usage (requests) and reset time by key (for example, IP
+     * addresses or API keys).
+     *
+     * They are split into two to avoid having to iterate through the entire set to
+     * determine which ones need reset. Instead, `Client`s are moved from `previous`
+     * to `current` as they hit the endpoint. Once `windowMs` has elapsed, all clients
+     * left in `previous`, i.e., those that have not made any recent requests, are
+     * known to be expired and can be deleted in bulk.
+     */
+    this.previous = /* @__PURE__ */ new Map();
+    this.current = /* @__PURE__ */ new Map();
+    /**
+     * Confirmation that the keys incremented in once instance of MemoryStore
+     * cannot affect other instances.
+     */
+    this.localKeys = true;
+  }
+  /**
+   * Method that initializes the store.
+   *
+   * @param options {Options} - The options used to setup the middleware.
+   */
   init(options) {
     this.windowMs = options.windowMs;
-    this.resetTime = calculateNextResetTime(this.windowMs);
-    this.hits = {};
-    this.interval = setInterval(async () => {
-      await this.resetAll();
+    if (this.interval)
+      clearInterval(this.interval);
+    this.interval = setInterval(() => {
+      this.clearExpired();
     }, this.windowMs);
     if (this.interval.unref)
       this.interval.unref();
   }
+  /**
+   * Method to fetch a client's hit count and reset time.
+   *
+   * @param key {string} - The identifier for a client.
+   *
+   * @returns {ClientRateLimitInfo | undefined} - The number of hits and reset time for that client.
+   *
+   * @public
+   */
+  async get(key) {
+    return this.current.get(key) ?? this.previous.get(key);
+  }
+  /**
+   * Method to increment a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client.
+   *
+   * @returns {ClientRateLimitInfo} - The number of hits and reset time for that client.
+   *
+   * @public
+   */
   async increment(key) {
-    var _a;
-    const totalHits = ((_a = this.hits[key]) != null ? _a : 0) + 1;
-    this.hits[key] = totalHits;
-    return {
-      totalHits,
-      resetTime: this.resetTime
-    };
+    const client = this.getClient(key);
+    const now = Date.now();
+    if (client.resetTime.getTime() <= now) {
+      this.resetClient(client, now);
+    }
+    client.totalHits++;
+    return client;
   }
+  /**
+   * Method to decrement a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client.
+   *
+   * @public
+   */
   async decrement(key) {
-    const current = this.hits[key];
-    if (current)
-      this.hits[key] = current - 1;
+    const client = this.getClient(key);
+    if (client.totalHits > 0)
+      client.totalHits--;
   }
+  /**
+   * Method to reset a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client.
+   *
+   * @public
+   */
   async resetKey(key) {
-    delete this.hits[key];
+    this.current.delete(key);
+    this.previous.delete(key);
   }
+  /**
+   * Method to reset everyone's hit counter.
+   *
+   * @public
+   */
   async resetAll() {
-    this.hits = {};
-    this.resetTime = calculateNextResetTime(this.windowMs);
+    this.current.clear();
+    this.previous.clear();
   }
+  /**
+   * Method to stop the timer (if currently running) and prevent any memory
+   * leaks.
+   *
+   * @public
+   */
   shutdown() {
     clearInterval(this.interval);
+    void this.resetAll();
+  }
+  /**
+   * Recycles a client by setting its hit count to zero, and reset time to
+   * `windowMs` milliseconds from now.
+   *
+   * NOT to be confused with `#resetKey()`, which removes a client from both the
+   * `current` and `previous` maps.
+   *
+   * @param client {Client} - The client to recycle.
+   * @param now {number} - The current time, to which the `windowMs` is added to get the `resetTime` for the client.
+   *
+   * @return {Client} - The modified client that was passed in, to allow for chaining.
+   */
+  resetClient(client, now = Date.now()) {
+    client.totalHits = 0;
+    client.resetTime.setTime(now + this.windowMs);
+    return client;
+  }
+  /**
+   * Retrieves or creates a client, given a key. Also ensures that the client being
+   * returned is in the `current` map.
+   *
+   * @param key {string} - The key under which the client is (or is to be) stored.
+   *
+   * @returns {Client} - The requested client.
+   */
+  getClient(key) {
+    if (this.current.has(key))
+      return this.current.get(key);
+    let client;
+    if (this.previous.has(key)) {
+      client = this.previous.get(key);
+      this.previous.delete(key);
+    } else {
+      client = { totalHits: 0, resetTime: /* @__PURE__ */ new Date() };
+      this.resetClient(client);
+    }
+    this.current.set(key, client);
+    return client;
+  }
+  /**
+   * Move current clients to previous, create a new map for current.
+   *
+   * This function is called every `windowMs`.
+   */
+  clearExpired() {
+    this.previous = this.current;
+    this.current = /* @__PURE__ */ new Map();
   }
 };
 
 // source/lib.ts
-var isLegacyStore = (store) => typeof store.incr === "function" && typeof store.increment !== "function";
+var isLegacyStore = (store) => (
+  // Check that `incr` exists but `increment` does not - store authors might want
+  // to keep both around for backwards compatibility.
+  typeof store.incr === "function" && typeof store.increment !== "function"
+);
 var promisifyStore = (passedStore) => {
   if (!isLegacyStore(passedStore)) {
     return passedStore;
@@ -32434,6 +33361,7 @@ var promisifyStore = (passedStore) => {
     async resetKey(key) {
       return legacyStore.resetKey(key);
     }
+    /* istanbul ignore next */
     async resetAll() {
       if (typeof legacyStore.resetAll === "function")
         return legacyStore.resetAll();
@@ -32441,27 +33369,51 @@ var promisifyStore = (passedStore) => {
   }
   return new PromisifiedStore();
 };
+var getOptionsFromConfig = (config) => {
+  const { validations: validations2, ...directlyPassableEntries } = config;
+  return {
+    ...directlyPassableEntries,
+    validate: validations2.enabled
+  };
+};
+var omitUndefinedOptions = (passedOptions) => {
+  const omittedOptions = {};
+  for (const k of Object.keys(passedOptions)) {
+    const key = k;
+    if (passedOptions[key] !== void 0) {
+      omittedOptions[key] = passedOptions[key];
+    }
+  }
+  return omittedOptions;
+};
 var parseOptions = (passedOptions) => {
-  var _a, _b, _c;
   const notUndefinedOptions = omitUndefinedOptions(passedOptions);
+  const validations2 = getValidations(notUndefinedOptions?.validate ?? true);
+  validations2.validationsConfig();
+  validations2.draftPolliHeaders(
+    // @ts-expect-error see the note above.
+    notUndefinedOptions.draft_polli_ratelimit_headers
+  );
+  validations2.onLimitReached(notUndefinedOptions.onLimitReached);
+  let standardHeaders = notUndefinedOptions.standardHeaders ?? false;
+  if (standardHeaders === true)
+    standardHeaders = "draft-6";
   const config = {
     windowMs: 60 * 1e3,
-    max: 5,
+    limit: passedOptions.max ?? 5,
+    // `max` is deprecated, but support it anyways.
     message: "Too many requests, please try again later.",
     statusCode: 429,
-    legacyHeaders: (_a = passedOptions.headers) != null ? _a : true,
-    standardHeaders: (_b = passedOptions.draft_polli_ratelimit_headers) != null ? _b : false,
+    legacyHeaders: passedOptions.headers ?? true,
     requestPropertyName: "rateLimit",
     skipFailedRequests: false,
     skipSuccessfulRequests: false,
     requestWasSuccessful: (_request, response) => response.statusCode < 400,
     skip: (_request, _response) => false,
     keyGenerator(request, _response) {
-      if (!request.ip) {
-        console.error(
-          "WARN | `express-rate-limit` | `request.ip` is undefined. You can avoid this by providing a custom `keyGenerator` function, but it may be indicative of a larger issue."
-        );
-      }
+      validations2.ip(request.ip);
+      validations2.trustProxy(request);
+      validations2.xForwardedForHeader(request);
       return request.ip;
     },
     async handler(request, response, _next, _optionsUsed) {
@@ -32471,15 +33423,20 @@ var parseOptions = (passedOptions) => {
         response
       ) : config.message;
       if (!response.writableEnded) {
-        response.send(message != null ? message : "Too many requests, please try again later.");
+        response.send(message);
       }
     },
-    onLimitReached(_request, _response, _optionsUsed) {
-    },
+    // Allow the default options to be overriden by the options passed to the middleware.
     ...notUndefinedOptions,
-    store: promisifyStore((_c = notUndefinedOptions.store) != null ? _c : new MemoryStore())
+    // `standardHeaders` is resolved into a draft version above, use that.
+    standardHeaders,
+    // Note that this field is declared after the user's options are spread in,
+    // so that this field doesn't get overriden with an un-promisified store!
+    store: promisifyStore(notUndefinedOptions.store ?? new MemoryStore()),
+    // Print an error to the console if a few known misconfigurations are detected.
+    validations: validations2
   };
-  if (typeof config.store.increment !== "function" || typeof config.store.decrement !== "function" || typeof config.store.resetKey !== "function" || typeof config.store.resetAll !== "undefined" && typeof config.store.resetAll !== "function" || typeof config.store.init !== "undefined" && typeof config.store.init !== "function") {
+  if (typeof config.store.increment !== "function" || typeof config.store.decrement !== "function" || typeof config.store.resetKey !== "function" || config.store.resetAll !== void 0 && typeof config.store.resetAll !== "function" || config.store.init !== void 0 && typeof config.store.init !== "function") {
     throw new TypeError(
       "An invalid store was passed. Please ensure that the store is a class that implements the `Store` interface."
     );
@@ -32494,65 +33451,61 @@ var handleAsyncErrors = (fn) => async (request, response, next) => {
   }
 };
 var rateLimit = (passedOptions) => {
-  const options = parseOptions(passedOptions != null ? passedOptions : {});
-  if (typeof options.store.init === "function")
-    options.store.init(options);
+  const config = parseOptions(passedOptions ?? {});
+  const options = getOptionsFromConfig(config);
+  config.validations.creationStack(config.store);
+  config.validations.unsharedStore(config.store);
+  if (typeof config.store.init === "function")
+    config.store.init(options);
   const middleware = handleAsyncErrors(
     async (request, response, next) => {
-      const skip = await options.skip(request, response);
+      const skip = await config.skip(request, response);
       if (skip) {
         next();
         return;
       }
       const augmentedRequest = request;
-      const key = await options.keyGenerator(request, response);
-      const { totalHits, resetTime } = await options.store.increment(key);
-      const retrieveQuota = typeof options.max === "function" ? options.max(request, response) : options.max;
-      const maxHits = await retrieveQuota;
-      augmentedRequest[options.requestPropertyName] = {
-        limit: maxHits,
-        current: totalHits,
-        remaining: Math.max(maxHits - totalHits, 0),
+      const key = await config.keyGenerator(request, response);
+      const { totalHits, resetTime } = await config.store.increment(key);
+      config.validations.positiveHits(totalHits);
+      config.validations.singleCount(request, config.store, key);
+      const retrieveLimit = typeof config.limit === "function" ? config.limit(request, response) : config.limit;
+      const limit = await retrieveLimit;
+      config.validations.limit(limit);
+      const info = {
+        limit,
+        used: totalHits,
+        remaining: Math.max(limit - totalHits, 0),
         resetTime
       };
-      if (options.legacyHeaders && !response.headersSent) {
-        response.setHeader("X-RateLimit-Limit", maxHits);
-        response.setHeader(
-          "X-RateLimit-Remaining",
-          augmentedRequest[options.requestPropertyName].remaining
-        );
-        if (resetTime instanceof Date) {
-          response.setHeader("Date", new Date().toUTCString());
-          response.setHeader(
-            "X-RateLimit-Reset",
-            Math.ceil(resetTime.getTime() / 1e3)
-          );
+      Object.defineProperty(info, "current", {
+        configurable: false,
+        enumerable: false,
+        value: totalHits
+      });
+      augmentedRequest[config.requestPropertyName] = info;
+      if (config.legacyHeaders && !response.headersSent) {
+        setLegacyHeaders(response, info);
+      }
+      if (config.standardHeaders && !response.headersSent) {
+        if (config.standardHeaders === "draft-6") {
+          setDraft6Headers(response, info, config.windowMs);
+        } else if (config.standardHeaders === "draft-7") {
+          config.validations.headersResetTime(info.resetTime);
+          setDraft7Headers(response, info, config.windowMs);
         }
       }
-      if (options.standardHeaders && !response.headersSent) {
-        response.setHeader("RateLimit-Limit", maxHits);
-        response.setHeader(
-          "RateLimit-Remaining",
-          augmentedRequest[options.requestPropertyName].remaining
-        );
-        if (resetTime) {
-          const deltaSeconds = Math.ceil(
-            (resetTime.getTime() - Date.now()) / 1e3
-          );
-          response.setHeader("RateLimit-Reset", Math.max(0, deltaSeconds));
-        }
-      }
-      if (options.skipFailedRequests || options.skipSuccessfulRequests) {
+      if (config.skipFailedRequests || config.skipSuccessfulRequests) {
         let decremented = false;
         const decrementKey = async () => {
           if (!decremented) {
-            await options.store.decrement(key);
+            await config.store.decrement(key);
             decremented = true;
           }
         };
-        if (options.skipFailedRequests) {
+        if (config.skipFailedRequests) {
           response.on("finish", async () => {
-            if (!options.requestWasSuccessful(request, response))
+            if (!await config.requestWasSuccessful(request, response))
               await decrementKey();
           });
           response.on("close", async () => {
@@ -32563,40 +33516,34 @@ var rateLimit = (passedOptions) => {
             await decrementKey();
           });
         }
-        if (options.skipSuccessfulRequests) {
+        if (config.skipSuccessfulRequests) {
           response.on("finish", async () => {
-            if (options.requestWasSuccessful(request, response))
+            if (await config.requestWasSuccessful(request, response))
               await decrementKey();
           });
         }
       }
-      if (maxHits && totalHits === maxHits + 1) {
-        options.onLimitReached(request, response, options);
-      }
-      if (maxHits && totalHits > maxHits) {
-        if ((options.legacyHeaders || options.standardHeaders) && !response.headersSent) {
-          response.setHeader("Retry-After", Math.ceil(options.windowMs / 1e3));
+      config.validations.disable();
+      if (totalHits > limit) {
+        if (config.legacyHeaders || config.standardHeaders) {
+          setRetryAfterHeader(response, info, config.windowMs);
         }
-        options.handler(request, response, next, options);
+        config.handler(request, response, next, options);
         return;
       }
       next();
     }
   );
-  middleware.resetKey = options.store.resetKey.bind(options.store);
+  const getThrowFn = () => {
+    throw new Error("The current store does not support the get/getKey method");
+  };
+  middleware.resetKey = config.store.resetKey.bind(config.store);
+  middleware.getKey = typeof config.store.get === "function" ? config.store.get.bind(config.store) : getThrowFn;
   return middleware;
 };
-var omitUndefinedOptions = (passedOptions) => {
-  const omittedOptions = {};
-  for (const k of Object.keys(passedOptions)) {
-    const key = k;
-    if (passedOptions[key] !== void 0) {
-      omittedOptions[key] = passedOptions[key];
-    }
-  }
-  return omittedOptions;
-};
 var lib_default = rateLimit;
+// Annotate the CommonJS export names for ESM import in node:
+0 && (0);
 module.exports = rateLimit; module.exports["default"] = rateLimit; module.exports.rateLimit = rateLimit; module.exports.MemoryStore = MemoryStore;
 
 
@@ -32724,7 +33671,7 @@ const contentSecurityPolicy = function contentSecurityPolicy(options = {}) {
 contentSecurityPolicy.getDefaultDirectives = getDefaultDirectives
 contentSecurityPolicy.dangerouslyDisableDefaultSrc = dangerouslyDisableDefaultSrc
 
-const ALLOWED_POLICIES$2 = new Set(["require-corp", "credentialless"])
+const ALLOWED_POLICIES$2 = new Set(["require-corp", "credentialless", "unsafe-none"])
 function getHeaderValueFromOptions$6({policy = "require-corp"}) {
 	if (ALLOWED_POLICIES$2.has(policy)) {
 		return policy
@@ -33192,7 +34139,7 @@ module.exports["default"] = helmet
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"dotenv","version":"16.3.1","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","lint-readme":"standard-markdown","pretest":"npm run lint && npm run dts-check","test":"tap tests/*.js --100 -Rspec","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://github.com/motdotla/dotenv?sponsor=1","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@definitelytyped/dtslint":"^0.0.133","@types/node":"^18.11.3","decache":"^4.6.1","sinon":"^14.0.1","standard":"^17.0.0","standard-markdown":"^7.1.0","standard-version":"^9.5.0","tap":"^16.3.0","tar":"^6.1.11","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
+module.exports = JSON.parse('{"name":"dotenv","version":"16.4.5","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","lint-readme":"standard-markdown","pretest":"npm run lint && npm run dts-check","test":"tap tests/*.js --100 -Rspec","test:coverage":"tap --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@definitelytyped/dtslint":"^0.0.133","@types/node":"^18.11.3","decache":"^4.6.1","sinon":"^14.0.1","standard":"^17.0.0","standard-markdown":"^7.1.0","standard-version":"^9.5.0","tap":"^16.3.0","tar":"^6.1.11","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
 
 /***/ }),
 
@@ -33348,6 +34295,7 @@ const app = express();
 const config = __nccwpck_require__(4570);
 const lib = __nccwpck_require__(6804);
 const RateLimit = __nccwpck_require__(8604);
+const console = __nccwpck_require__(6206);
 
 // Configure rate limiter
 const limiter = RateLimit({

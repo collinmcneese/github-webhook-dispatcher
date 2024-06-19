@@ -1,17 +1,17 @@
 {
   "name": "github-webhook-dispatcher",
-  "version": "1.4.3",
+  "version": "2.0.0",
   "description": "API endpoint to route GitHub webhooks to specified targets",
   "main": "app.js",
   "scripts": {
     "start": "npx node dist/index.js",
-    "test": "eslint --ignore-path .eslintignore ./src ; cspell *.md ; npx markdownlint-cli -c markdownlint.yml *.md",
+    "test": "eslint ; cspell *.md ; npx markdownlint-cli -c markdownlint.yml *.md",
     "build": "ncc build src/app.js --license licenses.txt",
     "dev": "npx nodemon src/app.js"
   },
   "engines": {
     "npm": ">=8.0.0",
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",
@@ -28,6 +28,7 @@
   },
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
+    "@eslint/js": "^9.5.0",
     "@vercel/ncc": "^0.38.1",
     "cspell": "^8.8.4",
     "eslint": "^9.5.0",

@@ -9,6 +9,7 @@ const app = express();
 const config = require('./config');
 const lib = require('./lib');
 const RateLimit = require('express-rate-limit');
+const console = require('console');
 
 // Configure rate limiter
 const limiter = RateLimit({
