@@ -3,6 +3,7 @@ const toml = require('toml');
 const yaml = require('js-yaml');
 const fs = require('fs');
 const crypto = require('crypto');
+const console = require('console');
 
 // Function to process provided route file
 // Allowed formats are TOML, JSON, YAML
@@ -12,7 +13,7 @@ async function processRouteFile(routeFile) {
   // If the content is not one of these formats, throw an error
   let routeFileContent = fs.readFileSync(routeFile, 'utf-8');
 
-  let routeFileContentType = routeFile.split('.').pop().toLowerCase();
+  const routeFileContentType = routeFile.split('.').pop().toLowerCase();
 
   if (routeFileContentType === 'toml') {
     routeFileContent = toml.parse(routeFileContent);
@@ -35,11 +36,11 @@ async function getTargetUrl(owner, repo) {
 
   // Find a target match based on owner/repo or fallback to owner based route
   if (targetRoutes[owner] && targetRoutes[owner][repo]) {
-    let route = targetRoutes[owner][repo];
+    const route = targetRoutes[owner][repo];
     console.log(`Routing ${owner}/${repo} to ${route['target']}`);
     return route.target;
   } else if (targetRoutes[owner]) {
-    let route = targetRoutes[owner];
+    const route = targetRoutes[owner];
     console.log(`Org target match, routing ${owner}/${repo} to ${route['target']}`);
     return route.target;
   } else {
@@ -53,13 +54,13 @@ async function listRoutes() {
   const targetRoutes = await processRouteFile(config.routeFile);
   // process the targetRoutes object and output a list of all routes
   // Object structure is{owner: {target: 'url', repo: {target: 'url'}}}
-  let routes = [];
+  const routes = [];
 
   // Loop through the targetRoutes object and build the routes array
   // If the owner has a target, add it to the routes array
   // If the owner has repos, loop through them and add their targets to the routes array
   // Adds an object in format {owner: {target: 'url'}}
-  for (let owner in targetRoutes) {
+  for (const owner in targetRoutes) {
     if (targetRoutes[owner].target) {
       routes.push({
         owner: owner,
@@ -69,7 +70,7 @@ async function listRoutes() {
     // If the owner has other keys, loop through them and add their targets to the routes array
     // Adds an object in format {owner: {repo: {target: 'url'}}}
     if (Object.keys(targetRoutes[owner]).length > 1) {
-      for (let repo in targetRoutes[owner]) {
+      for (const repo in targetRoutes[owner]) {
         if (repo !== 'target') {
           routes.push({
             owner: owner,
@@ -89,14 +90,14 @@ async function listRouteHandler(req, res) {
     const routes = await listRoutes();
 
     if (req.query.format === 'json') {
-      let response = JSON.stringify(routes);
+      const response = JSON.stringify(routes);
       res.setHeader('Content-Type', 'application/json');
       res.status(200).send(response);
     } else {
       res.setHeader('Content-Type', 'text/plain');
 
       // Map the routes array to a string with one route per line
-      let response = routes.map(route => {
+      const response = routes.map(route => {
         if (route.repo) {
           return `${route.owner}/${route.repo} -> ${route.target}`;
         } else {
@@ -165,7 +166,7 @@ async function webhookHandler(req, res) {
     // Process commit webhook events
     if (payload.ref && payload.commits) {
       console.log(`${payload.repository.full_name}: Commit event received for ref ${payload.ref}`);
-      let targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
+      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
       if (targetUrl) {
         await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
       }
@@ -174,7 +175,7 @@ async function webhookHandler(req, res) {
     // Process pull request webhook events
     if (payload.pull_request) {
       console.log(`${payload.repository.full_name}: Pull request event received for pull request #${payload.pull_request.number}`);
-      let targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
+      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
       if (targetUrl) {
         await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
       }
