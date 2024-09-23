@@ -28,13 +28,13 @@
   },
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
-    "@eslint/js": "^9.10.0",
+    "@eslint/js": "^9.11.0",
     "@vercel/ncc": "^0.38.1",
-    "cspell": "^8.14.2",
-    "eslint": "^9.10.0",
+    "cspell": "^8.14.4",
+    "eslint": "^9.11.0",
     "eslint-config-strongloop": "^2.1.0",
     "markdownlint-cli": "^0.41.0",
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.7"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
