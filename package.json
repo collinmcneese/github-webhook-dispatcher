@@ -30,7 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@vercel/ncc": "^0.38.3",
-    "cspell": "^8.17.1",
+    "cspell": "^8.17.2",
     "eslint": "^9.18.0",
     "eslint-config-strongloop": "^2.1.0",
     "markdownlint-cli": "^0.43.0",
