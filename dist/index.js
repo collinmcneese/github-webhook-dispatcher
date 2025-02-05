@@ -23121,23 +23121,33 @@ function pathToRegexp(path, keys, options) {
     return new RegExp(path.join('|'), flags);
   }
 
+  if (typeof path !== 'string') {
+    throw new TypeError('path must be a string, array of strings, or regular expression');
+  }
+
   path = path.replace(
     /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
     function (match, slash, format, key, capture, star, optional, offset) {
-      pos = offset + match.length;
-
       if (match[0] === '\\') {
         backtrack += match;
+        pos += 2;
         return match;
       }
 
       if (match === '.') {
         backtrack += '\\.';
         extraOffset += 1;
+        pos += 1;
         return '\\.';
       }
 
-      backtrack = slash || format ? '' : path.slice(pos, offset);
+      if (slash || format) {
+        backtrack = '';
+      } else {
+        backtrack += path.slice(pos, offset);
+      }
+
+      pos = offset + match.length;
 
       if (match === '*') {
         extraOffset += 3;
@@ -33070,6 +33080,9 @@ __export(source_exports, {
 module.exports = __toCommonJS(source_exports);
 
 // source/headers.ts
+var import_node_buffer = __nccwpck_require__(181);
+var import_node_crypto = __nccwpck_require__(6982);
+var SUPPORTED_DRAFT_VERSIONS = ["draft-6", "draft-7", "draft-8"];
 var getResetSeconds = (resetTime, windowMs) => {
   let resetSeconds = void 0;
   if (resetTime) {
@@ -33079,6 +33092,12 @@ var getResetSeconds = (resetTime, windowMs) => {
     resetSeconds = Math.ceil(windowMs / 1e3);
   }
   return resetSeconds;
+};
+var getPartitionKey = (key) => {
+  const hash = (0, import_node_crypto.createHash)("sha256");
+  hash.update(key);
+  const partitionKey = hash.digest("hex").slice(0, 12);
+  return import_node_buffer.Buffer.from(partitionKey).toString("base64");
 };
 var setLegacyHeaders = (response, info) => {
   if (response.headersSent)
@@ -33114,6 +33133,17 @@ var setDraft7Headers = (response, info, windowMs) => {
     "RateLimit",
     `limit=${info.limit}, remaining=${info.remaining}, reset=${resetSeconds}`
   );
+};
+var setDraft8Headers = (response, info, windowMs, name, key) => {
+  if (response.headersSent)
+    return;
+  const windowSeconds = Math.ceil(windowMs / 1e3);
+  const resetSeconds = getResetSeconds(info.resetTime, windowMs);
+  const partitionKey = getPartitionKey(key);
+  const policy = `q=${info.limit}; w=${windowSeconds}; pk=:${partitionKey}:`;
+  const header = `r=${info.remaining}; t=${resetSeconds}`;
+  response.append("RateLimit-Policy", `"${name}"; ${policy}`);
+  response.append("RateLimit", `"${name}"; ${header}`);
 };
 var setRetryAfterHeader = (response, info, windowMs) => {
   if (response.headersSent)
@@ -33314,6 +33344,22 @@ var validations = {
       throw new ChangeWarning(
         "WRN_ERL_DEPRECATED_ON_LIMIT_REACHED",
         `The onLimitReached configuration option is deprecated and has been removed in express-rate-limit v7.`
+      );
+    }
+  },
+  /**
+   * Warns the user when an invalid/unsupported version of the draft spec is passed.
+   *
+   * @param version {any | undefined} - The version passed by the user.
+   *
+   * @returns {void}
+   */
+  headersDraftVersion(version) {
+    if (typeof version !== "string" || !SUPPORTED_DRAFT_VERSIONS.includes(version)) {
+      const versionString = SUPPORTED_DRAFT_VERSIONS.join(", ");
+      throw new ValidationError(
+        "ERR_ERL_HEADERS_UNSUPPORTED_DRAFT_VERSION",
+        `standardHeaders: only the following versions of the IETF draft specification are supported: ${versionString}.`
       );
     }
   },
@@ -33649,6 +33695,24 @@ var parseOptions = (passedOptions) => {
     message: "Too many requests, please try again later.",
     statusCode: 429,
     legacyHeaders: passedOptions.headers ?? true,
+    identifier(request, _response) {
+      let duration = "";
+      const property = config.requestPropertyName;
+      const { limit } = request[property];
+      const seconds = config.windowMs / 1e3;
+      const minutes = config.windowMs / (1e3 * 60);
+      const hours = config.windowMs / (1e3 * 60 * 60);
+      const days = config.windowMs / (1e3 * 60 * 60 * 24);
+      if (seconds < 60)
+        duration = `${seconds}sec`;
+      else if (minutes < 60)
+        duration = `${minutes}min`;
+      else if (hours < 24)
+        duration = `${hours}hr${hours > 1 ? "s" : ""}`;
+      else
+        duration = `${days}day${days > 1 ? "s" : ""}`;
+      return `${limit}-in-${duration}`;
+    },
     requestPropertyName: "rateLimit",
     skipFailedRequests: false,
     skipSuccessfulRequests: false,
@@ -33671,7 +33735,7 @@ var parseOptions = (passedOptions) => {
       }
     },
     passOnStoreError: false,
-    // Allow the default options to be overriden by the options passed to the middleware.
+    // Allow the default options to be overriden by the passed options.
     ...notUndefinedOptions,
     // `standardHeaders` is resolved into a draft version above, use that.
     standardHeaders,
@@ -33749,11 +33813,27 @@ var rateLimit = (passedOptions) => {
         setLegacyHeaders(response, info);
       }
       if (config.standardHeaders && !response.headersSent) {
-        if (config.standardHeaders === "draft-6") {
-          setDraft6Headers(response, info, config.windowMs);
-        } else if (config.standardHeaders === "draft-7") {
-          config.validations.headersResetTime(info.resetTime);
-          setDraft7Headers(response, info, config.windowMs);
+        switch (config.standardHeaders) {
+          case "draft-6": {
+            setDraft6Headers(response, info, config.windowMs);
+            break;
+          }
+          case "draft-7": {
+            config.validations.headersResetTime(info.resetTime);
+            setDraft7Headers(response, info, config.windowMs);
+            break;
+          }
+          case "draft-8": {
+            const retrieveName = typeof config.identifier === "function" ? config.identifier(request, response) : config.identifier;
+            const name = await retrieveName;
+            config.validations.headersResetTime(info.resetTime);
+            setDraft8Headers(response, info, config.windowMs, name, key);
+            break;
+          }
+          default: {
+            config.validations.headersDraftVersion(config.standardHeaders);
+            break;
+          }
         }
       }
       if (config.skipFailedRequests || config.skipSuccessfulRequests) {
@@ -34406,7 +34486,7 @@ module.exports["default"] = module.exports
 /***/ ((module) => {
 
 "use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"16.4.5","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","lint-readme":"standard-markdown","pretest":"npm run lint && npm run dts-check","test":"tap tests/*.js --100 -Rspec","test:coverage":"tap --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@definitelytyped/dtslint":"^0.0.133","@types/node":"^18.11.3","decache":"^4.6.1","sinon":"^14.0.1","standard":"^17.0.0","standard-markdown":"^7.1.0","standard-version":"^9.5.0","tap":"^16.3.0","tar":"^6.1.11","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"16.4.7","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","pretest":"npm run lint && npm run dts-check","test":"tap run --allow-empty-coverage --disable-coverage --timeout=60000","test:coverage":"tap run --show-full-coverage --timeout=60000 --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^18.11.3","decache":"^4.6.2","sinon":"^14.0.1","standard":"^17.0.0","standard-version":"^9.5.0","tap":"^19.2.0","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
 
 /***/ }),
 
