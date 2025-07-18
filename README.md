@@ -24,18 +24,18 @@ graph TD
 
 The following ENV variables are expected to be set in order for the application to function properly:
 
-- `WHDISPATCHER_PORT`: The port number that the Express API server should listen on. Defaults to 3000 if not set.
-- `WHDISPATCHER_WEBHOOK_SECRET`: The secret token used to verify incoming GitHub webhook events. This should match the secret token configured in the GitHub repository webhook settings.
-- `WHDISPATCHER_ROUTE_FILE`: The path to the file containing the targetRoutes object used to map incoming GitHub webhook events to downstream services. This should be a nested object that maps GitHub repository owners and names to target URLs. See the [Target Routes File](#target-routes-file) documentation for more information.
+- `WEBHOOK_DISPATCHER_PORT`: The port number that the Express API server should listen on. Defaults to 3000 if not set.
+- `WEBHOOK_DISPATCHER_WEBHOOK_SECRET`: The secret token used to verify incoming GitHub webhook events. This should match the secret token configured in the GitHub repository webhook settings.
+- `WEBHOOK_DISPATCHER_ROUTE_FILE`: The path to the file containing the targetRoutes object used to map incoming GitHub webhook events to downstream services. This should be a nested object that maps GitHub repository owners and names to target URLs. See the [Target Routes File](#target-routes-file) documentation for more information.
 
 ### Example
 
 In this example, the application will listen on port 8080, use the GitHub secret token `abc123` to verify incoming webhook events, and use the `targetRoutes` object in the file /path/to/routes.toml to route incoming webhook events to the appropriate downstream services.
 
 ```sh
-export WHDISPATCHER_PORT=8080
-export WHDISPATCHER_WEBHOOK_SECRET=abc123
-export WHDISPATCHER_ROUTE_FILE=/path/to/routes.toml
+export WEBHOOK_DISPATCHER_PORT=8080
+export WEBHOOK_DISPATCHER_WEBHOOK_SECRET=abc123
+export WEBHOOK_DISPATCHER_ROUTE_FILE=/path/to/routes.toml
 ```
 
 ## Running the Application
@@ -81,9 +81,9 @@ Then, run the Docker container, passing required environment variables:
 ```sh
 docker run \
   -p 3000:3000 \
-  -e WHDISPATCHER_PORT=3000 \
-  -e WHDISPATCHER_WEBHOOK_SECRET=abc123 \
-  -e WHDISPATCHER_ROUTE_FILE=/path/to/routes.toml \
+  -e WEBHOOK_DISPATCHER_PORT=3000 \
+  -e WEBHOOK_DISPATCHER_WEBHOOK_SECRET=abc123 \
+  -e WEBHOOK_DISPATCHER_ROUTE_FILE=/path/to/routes.toml \
   webhook-dispatcher
 ```
 
