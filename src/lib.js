@@ -5,6 +5,22 @@ const fs = require('fs');
 const crypto = require('crypto');
 const console = require('console');
 
+/**
+ * Checks if an event type is allowed for a given route configuration
+ * @param {string} eventType - The GitHub webhook event type from X-GitHub-Event header
+ * @param {object} routeConfig - The route configuration object
+ * @returns {boolean} True if the event should be forwarded, false otherwise
+ */
+function isEventAllowed(eventType, routeConfig) {
+  // If no events filter is specified, allow all events (backward compatibility)
+  if (!routeConfig.events || !Array.isArray(routeConfig.events)) {
+    return true;
+  }
+
+  // Check if the event type is in the allowed events list
+  return routeConfig.events.includes(eventType);
+}
+
 // Function to process provided route file
 // Allowed formats are TOML, JSON, YAML
 async function processRouteFile(routeFile) {
@@ -38,11 +54,11 @@ async function getTargetUrl(owner, repo) {
   if (targetRoutes[owner] && targetRoutes[owner][repo]) {
     const route = targetRoutes[owner][repo];
     console.log(`Routing ${owner}/${repo} to ${route['target']}`);
-    return route.target;
+    return route;
   } else if (targetRoutes[owner]) {
     const route = targetRoutes[owner];
     console.log(`Org target match, routing ${owner}/${repo} to ${route['target']}`);
-    return route.target;
+    return route;
   } else {
     console.log(`No route found for ${owner}/${repo}`);
   }
@@ -163,23 +179,43 @@ async function webhookHandler(req, res) {
     // Get the payload from the request body
     const payload = req.body;
 
-    // Process commit webhook events
-    if (payload.ref && payload.commits) {
-      console.log(`${payload.repository.full_name}: Commit event received for ref ${payload.ref}`);
-      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
-      if (targetUrl) {
-        await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
-      }
+    // Get the event type from the X-GitHub-Event header
+    const eventType = req.get('x-github-event');
+
+    if (!eventType) {
+      console.log('x-github-event header missing');
+      return res.status(400).send('Bad Request: Missing event type');
     }
 
-    // Process pull request webhook events
-    if (payload.pull_request) {
-      console.log(`${payload.repository.full_name}: Pull request event received for pull request #${payload.pull_request.number}`);
-      const targetUrl = await getTargetUrl(payload.repository.owner.login, payload.repository.name);
-      if (targetUrl) {
-        await sendPayload(targetUrl, JSON.stringify(payload), config.debug);
-      }
+    // Ensure we have repository information
+    if (!payload.repository || !payload.repository.owner || !payload.repository.name) {
+      console.log('Missing repository information in payload');
+      return res.status(400).send('Bad Request: Missing repository information');
     }
+
+    const owner = payload.repository.owner.login;
+    const repo = payload.repository.name;
+
+    console.log(`${owner}/${repo}: ${eventType} event received`);
+
+    // Get the route configuration for this repository
+    const routeConfig = await getTargetUrl(owner, repo);
+
+    if (!routeConfig) {
+      console.log(`No route found for ${owner}/${repo}, skipping event`);
+      return res.status(200).send('OK');
+    }
+
+    // Check if this event type is allowed for this route
+    if (!isEventAllowed(eventType, routeConfig)) {
+      console.log(`Event type '${eventType}' is not allowed for ${owner}/${repo}, filtering out`);
+      return res.status(200).send('OK');
+    }
+
+    console.log(`Forwarding ${eventType} event for ${owner}/${repo} to ${routeConfig.target}`);
+
+    // Forward the webhook payload
+    await sendPayload(routeConfig.target, JSON.stringify(payload), config.debug);
 
     // Send a response to the webhook
     res.statusCode = 200;
@@ -211,6 +247,7 @@ async function openapiHandler(req, res) {
 }
 
 module.exports = {
+  isEventAllowed,
   listRouteHandler,
   openapiHandler,
   webhookHandler,

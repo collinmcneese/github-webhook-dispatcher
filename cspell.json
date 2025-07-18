@@ -3,7 +3,8 @@
   "language": "en",
   "words": [
       "collinmcneese",
-      "WHDISPATCHER",
-      "openapi"
+      "WEBHOOK_DISPATCHER",
+      "openapi",
+      "WHDISPATCHER"
   ]
 }
