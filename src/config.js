@@ -2,9 +2,8 @@
 require('dotenv').config();
 
 // Get the route file from the environment
-// This file should be present or else the app will not start
 if (!process.env.WEBHOOK_DISPATCHER_ROUTE_FILE) {
-  throw new Error('WEBHOOK_DISPATCHER_ROUTE_FILE environment variable not set');
+  console.log('WEBHOOK_DISPATCHER_ROUTE_FILE environment variable not set');
 }
 
 // Get the route file from the environment

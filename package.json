@@ -5,7 +5,11 @@
   "main": "app.js",
   "scripts": {
     "start": "npx node dist/index.js",
-    "test": "eslint ; cspell *.md ; npx markdownlint-cli -c markdownlint.yml *.md",
+    "test": "npm run test:lint && npm run test:spell && npm run test:markdown && npm run test:unit",
+    "test:lint": "eslint",
+    "test:spell": "cspell *.md",
+    "test:markdown": "npx markdownlint-cli -c markdownlint.yml *.md",
+    "test:unit": "node test/test-event-filtering.js && node test/test-route-processing.js && node test/test-signature-validation.js && node test/test-config-errors.js && node test/test-webhook-integration.js",
     "build": "ncc build src/app.js --license licenses.txt",
     "dev": "npx nodemon src/app.js"
   },
