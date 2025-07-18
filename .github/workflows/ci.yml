@@ -10,6 +10,14 @@
           - 'package*.json'
 
   jobs:
+    dependency-review:
+      runs-on: ubuntu-latest
+      steps:
+        - name: 'Dependency Review'
+          uses: actions/dependency-review-action@v4
+          with:
+            fail-on-severity: high
+
     validation:
       runs-on: ubuntu-latest
       strategy:
