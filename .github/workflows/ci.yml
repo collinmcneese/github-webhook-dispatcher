@@ -1,5 +1,7 @@
 ---
   name: ci-javascript
+  permissions:
+    contents: read
 
   on:
     workflow_dispatch:
