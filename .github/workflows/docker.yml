@@ -40,7 +40,7 @@ jobs:
           (echo ${{ needs.version-collector.outputs.package-version }} | grep -s -q -E '^[0-9]+\.[0-9]+\.[0-9]+$') || (echo "could not determine version!" && exit 1)
 
       - name: Log in to the Container registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -49,13 +49,13 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Build development Docker image on pull request
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_call'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
         with:
           push: false
           labels: ${{ steps.meta.outputs.labels }}
@@ -66,7 +66,7 @@ jobs:
 
       - name: Build and push latest Docker image
         if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
         with:
           push: true
           labels: ${{ steps.meta.outputs.labels }}
