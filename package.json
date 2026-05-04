@@ -52,7 +52,7 @@
     "@eslint/js": "^10.0.1",
     "@vercel/ncc": "^0.38.4",
     "cspell": "^10.0.0",
-    "eslint": "^10.2.1",
+    "eslint": "^10.3.0",
     "eslint-config-strongloop": "^2.1.0",
     "jest": "^30.3.0",
     "js-yaml": "^4.1.1",
