@@ -40,7 +40,7 @@ jobs:
           (echo ${{ needs.version-collector.outputs.package-version }} | grep -s -q -E '^[0-9]+\.[0-9]+\.[0-9]+$') || (echo "could not determine version!" && exit 1)
 
       - name: Log in to the Container registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
