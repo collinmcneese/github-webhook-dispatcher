@@ -50,21 +50,21 @@
   "homepage": "https://github.com/collinmcneese/github-webhook-dispatcher#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vercel/ncc": "^0.44.0",
+    "@vercel/ncc": "^0.44.1",
     "cspell": "^10.0.1",
-    "eslint": "^10.5.0",
+    "eslint": "^10.8.0",
     "eslint-config-strongloop": "^2.1.0",
     "jest": "^30.4.2",
     "js-yaml": "^5.2.3",
-    "markdownlint-cli": "^0.49.0",
+    "markdownlint-cli": "^0.49.1",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.5.2",
-    "helmet": "^8.2.0",
-    "toml": "^4.1.1"
+    "express-rate-limit": "^8.6.1",
+    "helmet": "^8.3.0",
+    "toml": "^5.0.0"
   }
 }
