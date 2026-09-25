@@ -51,7 +51,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@vercel/ncc": "^0.45.0",
-    "cspell": "^10.2.2",
+    "cspell": "^10.3.3",
     "eslint": "^10.10.0",
     "eslint-config-strongloop": "^2.1.0",
     "jest": "^30.5.1",
@@ -61,7 +61,7 @@
     "supertest": "^7.2.2"
   },
   "dependencies": {
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
